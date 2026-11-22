@@ -1,0 +1,135 @@
+# ROADMAP — KineForge
+
+Date: 2026-11-14. Ordered by dependency. Each milestone is small, measurable
+and ends with explicit acceptance criteria; nothing after M0 starts until the
+architecture is approved. "H1" etc. refer to hardware classes in
+[PERFORMANCE_PLAN.md](PERFORMANCE_PLAN.md); "E*n*" to [EXPERIMENT_PLAN.md](EXPERIMENT_PLAN.md).
+
+## Track map
+
+| Requested track | Milestones |
+|---|---|
+| Foundational research | M0 |
+| Cross-target Rust/WASM CI builds | M1 (and every later milestone) |
+| Core libraries | M2, M3 |
+| Telemetry | M4 |
+| Simulation | M5 |
+| Browser input & GPU capability detection | M6b, M8 |
+| Minimal prototype | M7 (native slice) + M8 (web slice) |
+| Rendering | M7 |
+| Web version on static hosting | M8 |
+| Browser telemetry export/import & local-first persistence | M4 (format), M8 (OPFS, export/import) |
+| Analytics | M9 |
+| Aim training | M10 |
+| Calibration | M11 |
+| Measurement tooling | M12 |
+| Release | M13 |
+| Future extensions | §F |
+
+---
+
+## M0 — Foundational research ✅ (this deliverable)
+
+Acceptance: the ten documents exist; decisive claims verified against primary sources; open questions listed with verification procedures; **your review and approval of STACK_DECISION.md and ARCHITECTURE.md** (approved 2026-11-22); answers to STACK_DECISION.md §6 — items 2–8 still open, each needed only by the milestone that uses it (web accessibility and hosting: M8; Linux input permissions: M6a research mode; name: before any public repo or package; toolchain install: M1; Aimlabs: AL-E experiments only; ODD questions: M2/M11).
+
+## M1 — Toolchain, workspace, cross-target CI
+
+**Status 2026-11-22:** toolchain installed (rustup, Rust 1.100.0); workspace, lint gates, canary, reproducibility check, cargo-deny policy and CI workflow in place; all checks pass **locally on Linux x86-64** (fmt, clippy, tests, wasm32 and thumbv7em builds, canary, bit-identical rebuilds, cargo-deny). Pending: a GitHub repository so the six-runner CI can run (the `windows-11-arm` image's preinstalled rustup is unverified).
+
+- With your permission: install rustup and the pinned toolchain (+ `wasm32-unknown-unknown`, `thumbv7em-none-eabihf` targets).
+- Git repository, workspace with `kf-core` and `kf-dirgain` only (empty APIs are not created ahead of need).
+- CI on `ubuntu-24.04`, `ubuntu-24.04-arm`, `windows-2025`, `windows-11-arm`, `macos-15` (arm64), `macos-15-intel`: fmt, clippy (incl. `disallowed_methods` for non-deterministic float functions in core crates), tests; `cargo check --target wasm32-unknown-unknown` for portable crates; `--target thumbv7em-none-eabihf` for `kf-dirgain`; cargo-deny (licence allow-list + advisories).
+
+**Acceptance:** CI green on all six runners; a deliberate `f64::sin` call in `kf-core` fails clippy; a deliberate `std::fs` use in `kf-core` fails clippy (`disallowed_types`; `cargo check` for wasm32 would not catch it); a reproducibility job builds `kf-core`/`kf-dirgain` (native + wasm) twice in different directories and the SHA-256s match.
+
+## M2 — `kf-dirgain`: bit-exact Open Directional DPI port
+
+- Port engine, profile (de)serialisation, CRC, capabilities (≈350 lines), `#![no_std]`, no allocation.
+- Fixtures: all 2592 `scale_vectors.json` cases, the 17 C unit tests, CRC/JSON cases; **new stateful trace vectors** from a C generator (window lengths 0/1/16/31/32/64/128, every flag, 2×2, carry at ±32767/−32768, idle thresholds incl. u32 wrap, DPI switches, HID request/response pairs) — kept in KineForge unless you choose to adopt them in ODD.
+- Native-only differential fuzzer against the C engine (dev feature using the `cc` crate).
+
+**Acceptance:** 100 % fixture pass on native, wasm32 (Node runner) and thumbv7em build; ≥10⁸ fuzz steps with zero state mismatches; no `unsafe`.
+
+## M3 — `kf-core`: units, provenance, sensitivity mathematics
+
+- Newtypes (counts, ns, radians), `InputLevel`/`EvidenceClass` (data provenance)/`ClaimStatus` (labels of constants)/clock-domain enums, `InputEvent`.
+- Sensitivity: yaw/pitch per count, cm/360, FOV h↔v, Hor+/Vert− aspect scaling, monitor-distance matching (0 %…100 %), conversion between profiles; a profile table where every constant carries its `claim_status` and source.
+
+**Acceptance:** hand-computed fixtures (e.g. 0.022°/count, sens 1, 800 CPI → 51.95 cm/360; Source 90° @ 4:3 → 106.26° @ 16:9); property tests (round-trip conversions); identical results native vs wasm32.
+
+## M4 — Telemetry (`kf-telemetry`, `kf-store` native, `kf-cli` v0)
+
+- KFLOG v1 writer/reader/validator/recovery; session header/end; Parquet export (native); stored-ZIP `.kfz` export/import; `FORMAT.md`; stdlib-only `read_kflog.py`.
+
+**Acceptance:** PERFORMANCE_PLAN N9a (3 sources × 8000 events/s + frames + sim records, zero drops, ≤1 % core), N9b (SIGKILL loss ≤ 100 ms + writer backlog; recovery via sidecar, raw file untouched) and N9c (power-loss simulation ≤ 1.1 s) on H1; untrusted-input fuzzing of the reader/validator (malformed lengths, CRCs, ZIP members) finds no panics; a file written on Linux reads identically on Windows/macOS/wasm (hash); Python reader output equals Rust reader output on golden files.
+
+## M5 — Simulation core (`kf-sim`)
+
+- Fixed-tick clock (1 kHz default), camera from integer count totals, own xoshiro256++ + samplers, analytic target trajectories, ray–sphere/box hit tests, static-flick scenario, scoring model v1, replay driver.
+
+**Acceptance (E2, E10):** replaying a corpus at simulated frame rates 30–1000 Hz gives identical camera state; per-tick state hashes identical on x86-64 Linux, aarch64 macOS (CI) and wasm32; golden RNG vectors stable.
+
+## M6 — Input capture spikes (`kf-input`)
+
+**M6a native:** Linux (evdev with permission; permission-free X11 XI2 raw / Wayland relative-pointer path), Windows Raw Input thread (`GetRawInputBuffer`, QPC), macOS (path chosen per STACK_DECISION §4); capability detection; optional hidraw L1 ground-truth backend (already readable on this machine).
+
+**M6b browser:** Pointer Lock with `unadjustedMovement` (recorded result; a new source per lock acquisition; no silent fallback), exactly one motion event type per session with leaf-only coalesced events, lock-lifecycle annotations, COI detection.
+
+Both: nothing on the capture path blocks — per-source rings with atomic drop accounting, recorder thread, non-blocking sim ring and per-frame record messages (ARCHITECTURE.md §3) — OS-specific thread priorities recorded, `RIDEV_NOLEGACY` only during captured trials on Windows.
+
+**Acceptance (E0, E1):** clock characterisation fixtures for every path on H1; with uinput (available via ACL) and, if acquired, an RP2040 HID count source: Σ counts exact for every `os_raw_counts` path, scaling/acceleration detected and labelled for others; provenance in every session header.
+
+## M7 — Native vertical slice (minimal prototype, part 1)
+
+- winit window + thin wgpu renderer (instanced targets, crosshair, environment), egui HUD/settings, present-mode selection, `desired_maximum_frame_latency = 1` default, frame statistics recorded; static-flick scenario end to end with KFLOG recording.
+
+**Acceptance:** N1, N2 (Fifo), N5 (headless input→sim→encode loop) on H1 @ 165 Hz, N6 measured; EXPERIMENT_PLAN E11 (render–sim geometric consistency) passes on Vulkan (and DX12/Metal in CI); session validates and replays bit-identically (drain-faithful) in `kf-cli`.
+
+## M8 — Web vertical slice on static hosting (minimal prototype, part 2)
+
+- Same scenario in the browser; WebGPU with WebGL2 fallback (retry adapter once); capability report page; COOP/COEP/CSP via `_headers` on the chosen host; OPFS log via a plain JS Worker; `persist()`; export (`showSaveFilePicker` or Blob) and import; achieved-rAF display; service worker for offline (updates between sessions only).
+
+**Acceptance:** W1 size measured (single vs dual artifact decided on data) and ≤ ceiling; W2/W3 load times; Playwright smoke in CI (WebGPU-SwiftShader + WebGL2: render, readback hash, OPFS write/read, export); a session exported from Chromium and Firefox replays bit-identically in native `kf-cli`; EXPERIMENT_PLAN E11 passes on WebGPU-SwiftShader and WebGL2; the degradation matrix (WEB_PLATFORM_RESEARCH.md §2.9) is implemented and W10 (quota exhaustion) passes; browser experiments X-B1, X-B5, X-B7 run and recorded.
+
+## M9 — Analytics v1 (`kf-analytics`)
+
+Flick segmentation, endpoint error (along/across), overshoot, submovements, reaction time, Fitts throughput (W_e = 4.133·SD), tracking RMS error / time-on-target / lag, directional bias with CIs.
+
+**Acceptance:** hand-computed and synthetic-trajectory fixtures with known answers; identical results native vs wasm (declared tolerance for float kernels); derived Parquet tables carry provenance metadata.
+
+## M10 — Aim trainer v1
+
+Scenario file format; families: static flick, dynamic flick (moving targets), centre-out, switching, reflex, precision, smooth tracking, reactive tracking, with shared pacing parameters (AIMLABS_RESEARCH.md §5 — KineForge's own designs); configurable scoring models over score-eligible metrics only; the `kf-sim` `experiment` module (seeded condition/block schedules, ABBA/Latin-square, warm-up flags, block annotations, one linked session per block, header `experiment` object); egui menus/results; benchmark mode with fixed seeds.
+
+**Acceptance:** every family and every experiment schedule reproducible from seed (hash test); scoring fixtures; usability pass on native and web; N1/N2 hold in the heaviest scenario.
+
+## M11 — Calibration (Open Directional DPI)
+
+Port the authoritative calibration analysis (frozen with fixtures from real logs first), fitting/validation (E8), profile comparison, export as ODD JSON + 28-byte profile, upload via `kf-input` feature `odd-hid` (hidapi/hidraw natively, WebHID on Chromium).
+
+**Acceptance:** analysis output equals the frozen fixtures; exported profiles byte-equal ODD's serializer; held-out validation report generated; **profile export refused for sources outside the calibration-validity rule** (EXPERIMENT_PLAN E8; e.g. accelerated browser streams); E8 step 0 (hidraw vs browser fit comparison) reported; firmware round-trip on the Glorious mouse (with your consent; device writes are irreversible-ish operations).
+
+## M12 — Measurement tooling
+
+Photodiode + microcontroller rig firmware and host tool; E5 latency and E6 pacing report generators; programmable HID count source firmware.
+
+**Acceptance:** rig self-test (LED loopback) shows ≤0.1 ms timing error; baseline N11 latency numbers recorded per configuration.
+
+## M13 — Packaging and release
+
+cargo-dist release workflow; .app/.dmg (signed + notarised on macOS runners), MSI (signed), deb/AppImage; web deploy; licence notices (cargo-about); SBOM.
+
+**Acceptance:** clean-machine install tests per OS; web deploy passes the smoke suite against production headers; unsigned release artifacts rebuild bit-identically and their SHA-256s are published next to the SBOM.
+
+## F — Future extensions (each only when a concrete need exists)
+
+- Standalone sensitivity converter (web + CLI) — `kf-core` only.
+- Mouse analyzer without 3D — `kf-input` + `kf-analytics`.
+- Latency research tool — rig + minimal renderer.
+- Flick/tracking analyzers and a data-visualisation app (Parquet + DuckDB/Polars, or uPlot dashboards on the web).
+- Experiment environment app (UI and study management on top of `kf-sim::experiment`; pre-registration workflow).
+- DOM accessible web UI (strategy C) if web accessibility becomes a requirement.
+- Python bindings or a C ABI only if a consumer needs live calls (data interchange covers most needs).
+- Firmware calibration/validation tools; MCU reuse of `kf-dirgain`.
+- Wasm threads once stable Rust supports them without nightly.
+- Sharable, non-sensitive benchmark exports.

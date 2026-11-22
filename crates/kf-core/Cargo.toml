@@ -1,0 +1,10 @@
+[package]
+name = "kf-core"
+description = "KineForge foundation: units, provenance, record types and sensitivity mathematics. No OS, browser or GPU dependencies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

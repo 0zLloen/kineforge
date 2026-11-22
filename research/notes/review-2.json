@@ -1,0 +1,290 @@
+[
+ {
+  "findings": [
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a72.3 item 1 \"Exactly one source drives the simulation: `simulation.input_source` in the header\", \u00a76.1 source_declare \"A new source id is opened on every pointer-lock acquisition\", \u00a77 header `\"input_source\": 0` and `capabilities.unadjusted_movement`, \u00a710 \"exactly one driving source\"; ARCH \u00a73 WebCapture \"new source id per lock acquisition\", \u00a74 \"One driving source\"",
+    "severity": "high",
+    "issue": "The fixes for findings 27/45 and 50 conflict. The header fixes the driving source to one id, written before any re-lock. Every Esc and re-lock then opens a new source id (WEB \u00a72.6 makes this routine), and the header cannot name it because it holds only facts known at start. After the first re-lock, browser motion cannot drive the sim without failing the validator's 'exactly one driving source' check. The re-lock can also resolve at a different level: unadjusted is rejected after Chrome's cooldown and the lock falls back to adjusted, so units change from OS counts to DIP. yaw_rad_per_unit and the i64 unit totals are fixed per session (\u00a72.3 items 4\u20135), so they would then mix units. The header's `capabilities.unadjusted_movement` also describes only the first lock.",
+    "fix": "Treat the header's `input_source` as the initial driving source and use the `source` field of each `drain` record as authoritative per frame. Allow a switch only to a source with the same `input_level`, `units` and `value_scale`, recorded as a `sim_control` (action `switch_source`, new source id) at the tick it takes effect. A re-lock that resolves to a different level or units ends the session (end_reason `input_level_changed`), and the next one starts fresh. Change the validator rule to 'each drain names exactly one source, and switches follow the rule'. Move `unadjusted_movement` out of the header and into each `source_declare`."
+   },
+   {
+    "doc": "STACK_DECISION.md + TECH_STACK_RESEARCH.md",
+    "location": "STACK \u00a71 row 'Derived data / interchange' \"stored-ZIP export with a stdlib Python reader\"; STACK \u00a72.3 \"shipping Parquet tables and a ~40-line stdlib Python reader in every export\"; TECH \u00a76.3 Export \"ZIP ... containing ... a \u224840-line stdlib-only Python reader\"",
+    "severity": "medium",
+    "issue": "Finding 23 was fixed in DATA_SPEC \u00a712.1 ('Bundles never contain executable code; read_kflog.py ... published at a fixed location') and ARCH \u00a76 ('the reference reader is published separately with its hash'). STACK and TECH still say the Python reader ships inside every export. The ZIP allow-list from \u00a712.1 would reject it on import, and a recipient could again be invited to run code from a received bundle.",
+    "fix": "In STACK \u00a71, STACK \u00a72.3 and TECH \u00a76.3, replace 'Python reader in every export' with: 'FORMAT.md (text) in the bundle; the stdlib reader is published separately with its SHA-256 (DATA_SPECIFICATION \u00a712.1)'."
+   },
+   {
+    "doc": "TECH_STACK_RESEARCH.md",
+    "location": "\u00a76.3 Storage architecture (adopted in DATA_SPECIFICATION.md): \"recovery = truncate at the first bad chunk\"",
+    "severity": "medium",
+    "issue": "This section says it records what DATA_SPEC adopted, but DATA_SPEC now forbids truncation. \u00a71 says the log is 'never rewritten, truncated or repaired in place', and \u00a75.3 cuts at the last `commit` chunk and writes a `raw.recovered.json` sidecar. The fix for finding 51 is therefore contradicted here, and the TECH text describes the failure mode the commit protocol exists to avoid (a cut at an inconsistent per-kind prefix).",
+    "fix": "Replace it with 'recovery = valid prefix up to the last `commit` chunk, recorded in a `raw.recovered.json` sidecar; the raw file is never modified (DATA_SPECIFICATION \u00a75.3)'."
+   },
+   {
+    "doc": "ARCHITECTURE.md + ROADMAP.md",
+    "location": "ARCH \u00a73 pipeline diagram \"recorder thread ... \u2514\u2500\u2500\u25b6 sim queue \u2500\u2500\u25b6 main loop drain\" and \"forwards the driving source's events to the sim queue\"; ROADMAP M6a \"bounded channel to the main loop\"",
+    "severity": "medium",
+    "issue": "The fix for finding 47 made capture threads non-blocking, but the stall only moved one hop. The doc does not say what the recorder thread does when the sim queue is full. If it is a bounded blocking channel, as ROADMAP M6a still says, a main-thread stall (pipeline creation, resize, Fifo block, Parquet derivation at close) blocks the recorder. The recorder is the single consumer of all rings, so every ring fills and records `queue_overflow` gaps, and recording again depends on the render loop. If the recorder drops on full, the sim silently loses driving-source events and the `drain.last_seq` replay contract breaks.",
+    "fix": "In ARCH \u00a73, specify the sim queue as a pre-allocated SPSC ring (\u22651 s at 8 kHz, like the capture rings) that the recorder fills with try_push and never blocks on. On overflow the recorder keeps recording and the sim aborts the trial with `sim_control abort_trial`, reason `sim_queue_overflow`. Replace 'bounded channel to the main loop' in ROADMAP M6a with 'non-blocking per-source rings \u2192 recorder thread \u2192 non-blocking sim ring'."
+   },
+   {
+    "doc": "ARCHITECTURE.md",
+    "location": "\u00a73 \"A recorder thread is the single consumer of all rings: it encodes every event into KFLOG chunks\"; \u00a76 \"Native: the recorder thread hands groups to the kf-store writer\"; DATA_SPEC \u00a75.2 commit watermark \"(t_ns, tick, per-source last seq)\" and hidden/pagehide flush",
+    "severity": "medium",
+    "issue": "`frame`, `drain`, `sim_*`, `sim_control` and most annotation records are produced on the main thread. No path from the main loop to the recorder is specified, and nothing says how the recorder picks the commit's `tick`. If the recorder cuts groups on its own 100 ms timer, a commit can claim a tick whose sim records are still in main-thread buffers, which brings back the inconsistent durable prefix of finding 51. On the web, the hidden/pagehide path 'posts all pending buffers immediately' but does not say a commit chunk follows. Recovery ignores everything after the last commit, so the gap annotation that W8 requires to be durable would be discarded after a tab discard.",
+    "fix": "State that the main loop pushes each frame's records (frame, drain, sim_*, sim_control, annotations) to the recorder over a non-blocking SPSC ring, tagged with the frame's last tick. The recorder cuts groups only at frame-batch boundaries and sets commit.tick to the last complete frame, with last_seq \u2265 that frame's drain.last_seq. In DATA_SPEC \u00a75.2, state that the hidden/pagehide flush writes a complete group followed by a `commit` chunk."
+   },
+   {
+    "doc": "ARCHITECTURE.md",
+    "location": "\u00a71 diagram (`kf-sim \u25b2 \u2514\u2500\u2500 kf-telemetry`; kf-input/kf-store \u2502 lines landing on kf-analytics/kf-calib) vs \u00a72 table; kf-sim \"replay driver consuming impl Iterator<Item = InputEvent> + drain/control records\"; kf-core types list \"InputEvent, Motion, Stamp, Source, Gap\"",
+    "severity": "medium",
+    "issue": "The replay-driver fix (finding 36) left the record types without a home. kf-sim produces sim_camera, sim_target, sim_shot, sim_control, frame and drain records and consumes drain/control records in replay. kf-telemetry encodes and reads them. The table gives kf-telemetry no dependency on kf-sim and kf-sim none on kf-telemetry, and kf-core declares only input event types. Neither crate can name the other's record structs. Under the stated 'arrows point from user to dependency' convention, the diagram draws kf-telemetry \u2192 kf-sim (\u25b2), kf-input \u2192 kf-analytics and kf-store \u2192 kf-calib, which contradicts the table.",
+    "fix": "Add plain-data record types to kf-core (`FrameRecord`, `Drain`, `SimControl`, `SimCamera`, `SimTarget`, `SimShot`, `Annotation`), so both kf-sim and kf-telemetry depend only on kf-core. Redraw the diagram to match the table: kf-input \u2192 kf-core, kf-store \u2192 kf-telemetry, kf-telemetry \u2192 kf-core, and no edge between kf-telemetry and kf-sim."
+   },
+   {
+    "doc": "ROADMAP.md + ARCHITECTURE.md",
+    "location": "ROADMAP \u00a7F \"Experiment environment (`kf-experiment`: conditions, randomisation, block designs, pre-registration)\"; ROADMAP M5/M10 (no experiment module); ARCH \u00a72 kf-sim \"experiment module\", \u00a78 row 8 \"kf-sim (experiment)\"",
+    "severity": "medium",
+    "issue": "Finding 14 was resolved in ARCH as an `experiment` module inside kf-sim, but ROADMAP still names a separate crate, `kf-experiment`, and defers it to 'future, only when a concrete need exists'. No milestone builds the module. Meanwhile the DATA_SPEC header `experiment` object, the block/condition/warm-up annotations, and EXPERIMENT_PLAN E7/E8 (counterbalanced blocks, one session per sensitivity condition per DATA_SPEC \u00a72.3 item 5) all require it.",
+    "fix": "Add the kf-sim `experiment` module to a milestone, for example M10: seeded condition/block schedule, ABBA/Latin-square, warm-up flags, block annotations, header `experiment` object, and linked one-session-per-block runs, with a seed-reproducibility acceptance test. Remove `kf-experiment` from \u00a7F, or reword it as 'experiment UI/app shell on top of kf-sim::experiment'."
+   },
+   {
+    "doc": "AIMLABS_RESEARCH.md",
+    "location": "\u00a71 item 4 \"X11 XInput2 raw motion, which for libinput mice carries **unaccelerated device counts** ... (VERIFIED from Proton/Wine source + XI2 spec + libinput API docs ...)\"",
+    "severity": "medium",
+    "issue": "Finding 8 was fixed in STACK \u00a74 ('predicted to equal HID counts ... unconfirmed until X-L1') and EXPERIMENT_PLAN E1/'Cheapest first pass' ('tests the predicted XI2-raw = counts identity'). AIMLABS still labels the same identity VERIFIED. That conflicts with TECH \u00a73.1 (libinput unaccelerated = device units plus configured rotation; Xwayland scaled), with DATA_SPEC \u00a73.1 (`os_unaccelerated` counts as counts only after a dual-source test), and with E3's confounder 'verify which'.",
+    "fix": "Split the label: 'Wine derives Windows raw input from XI2 raw motion: VERIFIED (Proton source). XI2 raw = libinput unaccelerated: VERIFIED (driver source). Equality with HID counts (no rotation or scaling): INFERRED, to be tested by X-L1 and AL-E0.'"
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a76.1 'Annotation codes' (names only) with layout `code u16`; \u00a76.4 `sim_target` `event u8 (spawn/update/despawn/hit/kill), shape u8`, `sim_control` `action u8 (pause/resume/abort_trial/end), reason u16`; \u00a76.2 `button u8`; \u00a711 \"Enum values are never renumbered or reused\"",
+    "severity": "medium",
+    "issue": "The revision added many new enum members (experiment annotations block_start/block_end/condition/warmup_*, queue_overflow, storage_error, and the sim_control actions), but none of the binary enums has numeric values. \u00a711 forbids renumbering numbers that were never assigned. A stdlib reader written from this spec, which \u00a71 principle 5 promises, cannot decode annotation codes, target events, shapes, control actions/reasons or buttons. Two implementations could also number them differently and still pass the validator.",
+    "fix": "Add explicit numeric tables: annotation `code` (e.g. 0x0001 kernel_dropped \u2026 with ranges for gap, state and experiment codes), `sim_target.event` 0\u20134, `shape`, `sim_control.action` 0\u20133 plus the `reason` codes, and the `button` mapping (0 = left, 1 = right, 2 = middle, 3/4 = side). State that unknown values are preserved and reported."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md (+ ARCHITECTURE.md, EXPERIMENT_PLAN.md)",
+    "location": "ARCH \u00a75 \"optional `frame_cap_hz` ... recorded in the session header\", \"crosshair (... the snap offset is recorded)\"; EXPERIMENT E11 \"the pixel-snap offset is recorded in the session header\"; DATA_SPEC \u00a79.2 \"`source_rank` declared in the header\"",
+    "severity": "low",
+    "issue": "Three fields that other docs, or DATA_SPEC itself, say are recorded have no place in the schema. The \u00a77 header and the \u00a76.1 source_declare define no `frame_cap_hz`, crosshair snap offset or `source_rank`. The snap offset also changes with resize or DPR changes mid-session, but the header holds only facts known at start.",
+    "fix": "Add `render: {present_mode, frame_cap_hz, desired_maximum_frame_latency}` to the header. Add `source_rank` to the `source_declare` schema. Record the crosshair snap offset (x, y in px) in a small JSON record or in an annotation emitted at start and on every resize/DPR change, and update ARCH \u00a75 and E11 to point to it."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a72.4 \"cm/360 = 2.54 \u00d7 2\u03c0 / (yaw_rad_per_count \u00d7 sens \u00d7 cpi)\" vs header `yaw_rad_per_unit`; \u00a77 clock domain `{\"id\": 0, \"kind\": \"session\", \"resolution_ns\": 5000}` vs \u00a72.1 required fields; \u00a77.1 MouseTester row \"meaning `app_dequeue`\"; \u00a77.1 \"Only input records (from KineForge's own host-side capture)\" vs the import table; \u00a710 \"exactly one driving source\" vs \u00a77.1 external sessions",
+    "severity": "low",
+    "issue": "The revision left several internal mismatches. (1) The header renamed the constant to `yaw_rad_per_unit`, but \u00a72.4 still uses `yaw_rad_per_count`. (2) Clock domain 0 omits `meaning`, `offset_*` and `drift_ppm`, which \u00a72.1 declares for every domain, and the `meaning` enum has no value for the session clock. (3) `app_dequeue` is a `receipt_meaning` value, not a clock-domain `meaning`. (4) \u00a77.1 says external input comes only from KineForge's own capture, but then maps MouseTester and ODD CSV imports to input records. (5) External sessions have no simulation, yet \u00a710 requires exactly one driving source.",
+    "fix": "Use `yaw_rad_per_unit` (or `yaw_rad_per_count` when value_scale = 1) in \u00a72.4. Make `meaning` and the offset fields optional for `kind: session`, or add `meaning: session_clock`. Write `receipt_meaning: app_dequeue` in the MouseTester row. Change \u00a77.1 to 'input records from KineForge capture or from the listed imports (labelled with their tool)'. Apply the driving-source and sim-recompute rules only when `simulation` is present (`source_app == null`)."
+   },
+   {
+    "doc": "STACK_DECISION.md",
+    "location": "\u00a74 Windows row \"QPC per drain + batch index\"",
+    "severity": "low",
+    "issue": "The fix for finding 45 removed `batch_ix`: DATA_SPEC \u00a76.2 input records have no batch field, and the batch is now ordered by the shared per-source `seq`. STACK still promises a per-drain batch index, so an implementer following it has nowhere to store it.",
+    "fix": "Change it to 'QPC per drain (one `t_ns` for every packet in the drain; order within the drain from the per-source `seq`)'."
+   },
+   {
+    "doc": "TECH_STACK_RESEARCH.md",
+    "location": "\u00a76.2 \"KineForge's worst-case raw rate (16\u201332 B \u00d7 8000 events/s \u2248 128\u2013256 KB/s)\"",
+    "severity": "low",
+    "issue": "After finding 41, DATA_SPEC \u00a76.6 defines the worst case as the research configuration, \u22480.85 MB/s (three 8 kHz sources plus frames and sim records). The smallest record is now 24 B (input_button), not 16 B. TECH still states the single-source figure as the worst case. The conclusion ('throughput does not decide') still holds, but the number disagrees with the spec it cites.",
+    "fix": "Write 'worst case \u22480.85 MB/s (DATA_SPECIFICATION \u00a76.6: three 8 kHz sources + frames + sim records), still >400\u00d7 below serde_json's \u22480.4 GB/s'."
+   },
+   {
+    "doc": "WEB_PLATFORM_RESEARCH.md + EXPERIMENT_PLAN.md",
+    "location": "WEB \u00a72.7 \"allowed only from `browser_locked_unadjusted` among browser sources (and from native L1/L2 sources)\" vs E8 \"Calibration validity by input level (normative)\" \"`os_unaccelerated` with acceleration verified absent\"; E8 has two '**Procedure.**' headings",
+    "severity": "low",
+    "issue": "The two statements of the calibration-validity rule differ. WEB's 'native L1/L2' admits `os_absolute_pointer` (L2\u2020, absolute coordinates, never deltas) and `os_unaccelerated` with no verification. E8, which calls itself normative, admits only device_report, os_raw_counts, os_unaccelerated with acceleration verified absent, and browser_locked_unadjusted. kf-calib could be implemented from either. E8 also repeats the 'Procedure.' heading around the rule.",
+    "fix": "In WEB \u00a72.7, replace '(and from native L1/L2 sources)' with a reference to the E8 list ('device_report, os_raw_counts, os_unaccelerated with `os_accel_off_verified`; never os_absolute_pointer'). In E8, rename the first heading to 'Validity rule.'"
+   },
+   {
+    "doc": "AIMLABS_RESEARCH.md",
+    "location": "\u00a77 closing line \"uinput is acceptable for E0\"; \u00a77 table AL-E1 \"sens {0.5,1,2,4}\" mapped to EXPERIMENT_PLAN E3",
+    "severity": "low",
+    "issue": "One bare Aimlabs-local ID from finding 32 remains. In KineForge's numbering, 'E0' is EXPERIMENT_PLAN clock characterisation, but here it means AL-E0. The new mapping column also pairs AL-E1 (4 sensitivity values) with E3, whose step 5 requires '\u22655 sensitivity values', so the two procedures disagree.",
+    "fix": "Change it to 'uinput is acceptable for AL-E0'. Align the sensitivity sets, either with AL-E1 using {0.25, 0.5, 1, 2, 4} or with E3 requiring \u22654 values."
+   },
+   {
+    "doc": "AIMLABS_RESEARCH.md + ROADMAP.md",
+    "location": "AIMLABS 'Evidence labels (`claim_status`, defined once in EXPERIMENT_PLAN.md \u00a70.2)' table; ROADMAP M3 \"a profile table where every constant carries its evidence label\"",
+    "severity": "low",
+    "issue": "AIMLABS says it uses the single \u00a70.2 definition but rewrites the meanings. VERIFIED adds 'the local install observed directly'. REQUIRES FURTHER VALIDATION becomes 'plausible but conflicting or weakly sourced', where \u00a70.2 says 'single observation, unreplicated, or rig not yet characterised'. INFERRED drops 'or a named model'. ROADMAP M3 names both `EvidenceClass` and `ClaimStatus` and then says constants carry an 'evidence label', which is the confusion finding 30 aimed to remove.",
+    "fix": "Remove the Meaning column from AIMLABS (keep a link only), or copy \u00a70.2 verbatim. Extend \u00a70.2 if 'local install observed directly' and 'conflicting sources' are wanted. In ROADMAP M3, write 'every constant carries its `claim_status` and source'."
+   },
+   {
+    "doc": "ARCHITECTURE.md",
+    "location": "\u00a78 row 4 \"Input latency research tool | Links: ... minimal render ... | Does not link: `kf-sim`, `kf-analytics`\"; row 3 \"(+ `kf-sim` for centre-out tasks)\"; \u00a72 kf-render \"Depends on: `kf-sim` (scene view types)\"; kf-calib \u2192 kf-analytics \u2192 kf-sim",
+    "severity": "low",
+    "issue": "The new link table contradicts the crate graph. If row 4's 'minimal render' is kf-render, it pulls in kf-sim, which the row says is not linked. Row 3 lists kf-sim as optional, but kf-calib depends on kf-analytics, which depends on kf-sim, so it is always linked.",
+    "fix": "For row 4, either move `SceneView` into kf-core so kf-render no longer depends on kf-sim, or change 'Does not link' to `kf-analytics` only. For row 3, drop '(+ kf-sim ...)' and note that kf-sim is always linked through kf-analytics."
+   },
+   {
+    "doc": "ARCHITECTURE.md + STACK_DECISION.md",
+    "location": "ARCH \u00a77 Firmware \"ODD vendor HID protocol via hidapi/hidraw natively and WebHID\", \u00a78 row 9 \"links `kf-dirgain`, `kf-calib`, hidapi\"; ROADMAP M11 \"upload via native hidapi/hidraw and WebHID\"; ARCH \u00a72 crate table; STACK \u00a77 version table",
+    "severity": "low",
+    "issue": "No crate is responsible for the ODD vendor-channel transport (profile upload/readback). kf-dirgain is no_std with zero dependencies, kf-calib depends only on kf-analytics and kf-dirgain, and kf-input's dependencies do not include hidapi or WebHID. STACK \u00a77 gives no hidapi version, even though M11 requires it.",
+    "fix": "Assign the transport to one crate, for example kf-input behind feature `odd-hid` (hidapi/hidraw natively, web-sys WebHID on wasm). kf-dirgain keeps the pure packet encode/decode. Add `hidapi` (2.6.x, Linux hidraw backend) to STACK \u00a77 and its licence to the \u00a78 check."
+   }
+  ]
+ },
+ {
+  "findings": [
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a72.3 item 1 and \u00a77 `\"input_source\": 0`; \u00a76.1 source_declare \"A new source id is opened on every pointer-lock acquisition\"; \u00a710 \"exactly one driving source\"; ARCH \u00a74 \"One driving source\"",
+    "severity": "high",
+    "issue": "The header names one fixed driving source id, but on the web every re-lock creates a new source id. Scenario: a Chromium session drives from source 0. The user presses Esc at 40 s and re-locks, which opens source 1. If the live sim follows only id 0, the camera stays frozen for the rest of the session. If it follows source 1, the header is wrong: replay feeds only source 0 and diverges from the first frame after the re-lock, and the validator's 'exactly one driving source' check either fails or passes a file that does not match what happened. A second problem: a re-lock can resolve differently. WEB \u00a72.9 allows an unadjusted\u2192adjusted fallback, and Firefox's fractional \u00d71024 units differ from integer DIP \u00d71. The single i64 `yaw_units` accumulator then holds units at two scales, but \u03c8 = yaw_units \u00d7 k / value_scale divides by only one value_scale. The camera jumps by up to 1024\u00d7, and the effective sensitivity changes mid-session, which contradicts \u00a72.3 item 5.",
+    "fix": "Make `drain.source` the authority for which source drove each frame. Turn the header field into the initial driving source. Change the validator rule to: the drains of one frame name one source, and the driving source changes only between a `pause` and a `resume`. Require every driving source in a session to share the same `units`, `value_scale` and `input_level`. When a re-lock resolves to anything different, end the session (`end_reason: input_level_changed`) and start a new one. If scales must ever mix, accumulate in 1/1024 units instead: add dx \u00d7 (1024 / value_scale), which is exact."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a72.1 'Simulation time'; \u00a79.1 \"steps the simulation to the tick containing the cutoff\" and \"Hit tests evaluate target state at the event's t_ns\"; \u00a76.3 frame `ticks u16`; ARCH \u00a74 Fixed-tick / Pause",
+    "severity": "high",
+    "issue": "The spec takes both the step target and the hit-test time directly from the session clock, but it never says whether ticks advance during a `pause`. Case A, ticks follow the session clock (as written): Esc at 10 s and re-lock at 13 s means the first frame after resume steps 3000 ticks. Spawn timers and lifetimes keep running through the pause unless every rule checks a paused flag. A tab hidden for 65.536 s or longer needs more ticks than `frame.ticks` (u16) can hold, so the value wraps. Case B, ticks freeze: after resume, tick 10 001 corresponds to t_ns 13.001 s. A shot at t_ns 13.2 s evaluates a 3 m/s target at trajectory time 13.2 s, while the sim and renderer show it at 10.2 s. The target is 9 m away, so the shot always misses. Separately, the drain record has no tick, so replay has to recompute it from `t_cutoff_ns`. Any live deviation from floor(cutoff/tick) therefore diverges in replay. A per-frame catch-up cap after a long stall is one such deviation.",
+    "fix": "Define a simulation time \u03c4 that advances only while running: \u03c4(t) = t_ns \u2212 \u03a3(paused intervals taken from sim_control t_ns). The step target is the tick containing \u03c4(cutoff). Hit tests use \u03c4(event t_ns), clamped to the target's [spawn, despawn] interval. Make `frame.first_tick/ticks` the replay authority, so replay never recomputes ticks from t_ns. Widen `ticks` to u32 and shrink `flags u16, _pad u32` to `flags u16, _pad u16`; the frame record stays 64 B."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a76.4 `sim_control` (tick, t_ns, action\u2026), \u00a79.1 \"plus sim_control records \u2026 at their ticks\"; ARCH \u00a74 Pause/resume/abort",
+    "severity": "high",
+    "issue": "Within a tick, replay cannot tell whether a control came before or after a drain. Records are buffered per kind, so a group's file order loses the interleaving of sim_control and drain chunks. A sim_control carries only a tick, and a drain carries only a frame. A pause raised during frame F gets the sim's current tick, which is the same tick at which F's drain is applied. Scenario: the user alt-tabs mid-flick on native. winit `Focused(false)` is handled at the start of frame F, giving a pause at tick 52 140. F's drain contains the last 9 motion events of the flick, and live discards them because the sim is paused. Replay applies the drain first and then the pause, so the camera is 9 events further on. Every later sim_camera record and the first shot after resume differ. When frames run faster than sim_hz, two frames share a tick. Then even a 'controls first at equal tick' rule gets an `abort_trial` raised after F's drain wrong (for example, device lost at submit).",
+    "fix": "Add `frame u64` and `phase u8` (before_drain/after_drain) to sim_control: `tick u64, t_ns i64, frame u64, action u8, phase u8, reason u16, _pad u32` = 32 B. Define replay per frame: apply before-phase controls, then the drain, then step `frame.ticks`, then apply after-phase controls. State that events drained while paused are discarded but still count towards `last_seq`."
+   },
+   {
+    "doc": "ARCHITECTURE.md + DATA_SPECIFICATION.md",
+    "location": "ARCH \u00a73 diagram and \"forwards the driving source's events to the sim queue\" (ROADMAP M6a: \"bounded channel to the main loop\"); DATA_SPEC \u00a79.1 drain `last_seq`",
+    "severity": "high",
+    "issue": "The spec does not say what the recorder does when the sim queue is full. Suppose the main thread stalls for about 2 s: pipeline creation on scenario load, nextDrawable blocking on an occluded macOS window, or the Windows modal size loop. (a) If the recorder blocks, it stops draining every ring. After 1 s every source overflows, including hidraw ground truth. Recording then depends on the render loop, which this design is meant to prevent. (b) If the recorder drops from the sim queue, the log contains seqs the sim never applied. The next drain's `last_seq` jumps past them, replay applies them, and the camera diverges for good. Nothing in the log marks this.",
+    "fix": "The sim path must never block the recorder, and its drops must be replayable. On sim-queue overflow, drop only from the sim path and emit an annotation `sim_queue_overflow` with `source, first_seq, lost` (the annotation layout already has these fields). Add the rule to \u00a79.1: replay skips the seqs listed in sim_queue_overflow annotations. Remove 'bounded channel' as a blocking primitive from M6a."
+   },
+   {
+    "doc": "ARCHITECTURE.md + DATA_SPECIFICATION.md",
+    "location": "ARCH \u00a73 'A recorder thread is the single consumer of all rings', \u00a76 Native; DATA_SPEC \u00a75.2 commit watermark `(t_ns, tick, per-source last seq)`",
+    "severity": "medium",
+    "issue": "Frame, drain, sim_*, sim_control and main-thread annotations are all produced on the main loop. No path to the single native encoder is specified, and the recorder flushes on its own 100 ms timer, which is not aligned to frames. If main-loop records arrive one at a time, a group can contain frame F's drain but only some of F's sim_shot/sim_target/sim_camera records. The commit's `tick` then covers sim records that sit in the next group. Scenario: SIGKILL right after that commit. Replaying the recovered prefix up to commit.tick produces a sim_shot that is not in the log, so crash-recovered sessions fail the drain-faithful replay check. A blocking handoff would also stall the frame.",
+    "fix": "Have the main loop send one message per frame that holds all of its records, through a never-block SPSC ring whose overflow is annotated. The recorder flushes only between frame messages. Define commit.tick as the last tick of the last complete frame in the group."
+   },
+   {
+    "doc": "ARCHITECTURE.md + DATA_SPECIFICATION.md",
+    "location": "ARCH \u00a76 Native (writer: write per group, fdatasync every 1000 ms), \u00a72 kf-store 'native file writer thread'; DATA_SPEC \u00a75.2 loss bound 'process kill \u2264 chunk_flush_ms + one in-flight group'",
+    "severity": "medium",
+    "issue": "The spec does not define how the recorder hands groups to the writer. One thread does both `write` and `fdatasync`, and fdatasync can take 2\u20135 s: ext4 with a large dirty page cache, a USB disk, or laptop power-saving. If the handoff is bounded, the recorder blocks. The rings overflow, and the sim's input stops (its events pass through the recorder), so the camera freezes. If the handoff is unbounded, groups pile up in memory, and a SIGKILL during the stall loses seconds of data. That breaks the N9b bound of 100 ms plus one group.",
+    "fix": "Run fdatasync on a separate thread, or use sync_file_range off the write path, so writing a group never waits for a sync. Make the recorder\u2192writer queue unbounded up to a stated memory cap. Beyond the cap, drop groups and record `storage_error`. Restate N9b as '\u2264 chunk_flush_ms + writer backlog at kill time' and report the maximum backlog in session_end."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a75.2 'Records are buffered per kind. All kind buffers are flushed together as one group'; \u00a76.1 source_declare 'must precede the first record using that source id'; \u00a710 'declarations before use'",
+    "severity": "medium",
+    "issue": "The spec does not define chunk order inside a group. Writing per-kind buffers in kind order is the natural implementation, and it puts `input_motion` (0x01) before `source_declare` (0x04) and `device_info` (0x05). Scenario: session start with hidraw, evdev and XI2, or any web re-lock. The new source's first motion records land in the same group as its declaration, and in file order they come before it. The validator rejects the file, and a streaming reader meets records whose source it has not seen.",
+    "fix": "Specify the order within a group: 0x00/0x04/0x05 declaration chunks first, then the other kinds in ascending order, then the `commit` chunk last. Alternatively, define 'precede' as 'in the same or an earlier group' and require readers to buffer one group."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a75.1 payload 'packed records of one kind \u2026 JSON payloads are padded with trailing spaces'; \u00a76.1 source_declare/device_info, \u00a76.5 app_result (var)",
+    "severity": "medium",
+    "issue": "JSON kinds have no per-record framing, yet buffering per kind puts several records of one kind in a chunk. The first group of a hidraw + evdev + XI2 session contains three source_declare documents. Concatenated as `{\u2026}{\u2026}{\u2026}   `, they make the stdlib reader's `json.loads` fail with 'Extra data'. `record_count` is defined only for fixed-size kinds, so a reader cannot split the documents either.",
+    "fix": "Require exactly one JSON document per chunk (record_count = 1), so a group carries several chunks of that kind. Alternatively, frame each JSON record as `u32 len, utf8[len]` padded to 8, like `annotation`."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a76.1 annotation `code u16` (codes listed by name only); \u00a76.4 sim_control `action u8 (pause/resume/abort_trial/end)`, `reason u16`; sim_target `event u8`, `shape u8`; \u00a76.2 `button u8`; \u00a76.3 frame `flags u16`; \u00a711 'Enum values are never renumbered'",
+    "severity": "medium",
+    "issue": "These on-disk enums have names but no numeric values, and frame `flags` and `reason` define no values at all. The Rust writer and the stdlib Python reader could therefore assign different numbers. For example, `button` 0 could mean left (DOM) or 1 could mean left (HID usage), and `pointer_lock_lost` might be 2 in one implementation and 3 in another. The 'Python reader output equals Rust reader output' gate in M4 cannot be specified, and \u00a711's 'never renumbered' has nothing to freeze.",
+    "fix": "Add numeric tables for every on-disk enum: annotation codes, sim_control action and reason, sim_target event and shape, button (state the convention, e.g. 0 = left, 1 = right, 2 = middle, 3/4 = side), and frame flag bits. Also define `lost = u32::MAX` for an unknown count (evdev SYN_DROPPED)."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a72.3 item 2 'Each motion record contributes (dx / value_scale, \u2026)', \u00a76.2 flags 'bit 2 absolute packet'; ARCH \u00a73 RawInputCapture 'absolute packets \u2026 flagged'",
+    "severity": "medium",
+    "issue": "Absolute packets stay in the Raw Input source with only a flag set, and \u00a72.3 applies every motion record to the camera. Under RDP, a VM or Parsec, or with a pen or touchscreen active, `MOUSE_MOVE_ABSOLUTE` packets carry coordinates from 0 to 65535. Applied as deltas, one packet turns the camera by up to 65535 \u00d7 0.000384 \u2248 25 rad. It also mixes levels within one source, against \u00a73.1 (`os_absolute_pointer` is a separate level).",
+    "fix": "Route absolute packets to their own `os_absolute_pointer` source, declared on first occurrence, so the driving source never contains them. Add to \u00a72.3 that records flagged absolute are never applied to the camera."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a76.4 sim_control actions 'pause/resume/abort_trial/end'; no keyboard/UI record kind; ARCH \u00a74 'Pause/resume/abort \u2026 are sim_control records so replay reproduces them'",
+    "severity": "medium",
+    "issue": "Only pause, resume, abort and end are recorded. A sim state change triggered by a keyboard key or an egui button cannot be represented: 'press Space to start', 'R to restart' (the KovaaK's convention), or 'continue' after the `abort_trial` on context loss. These change the tick at which spawns and RNG draws begin. Keys and UI clicks are not logged, so replay starts the trial at a different tick and every following sim_* record differs.",
+    "fix": "Add `start_trial` and `restart_trial` actions (and `next_block` if the experiment module drives blocks) to sim_control. Add a normative rule: every sim state change that does not come from the driving source's records goes through sim_control."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a79.1 '\u2026only which tick's camera state the shot used'; ARCH \u00a74 'orientation \u2026 recomputed every tick'",
+    "severity": "medium",
+    "issue": "The wording suggests that a shot uses the camera recomputed each tick. All events of a drain are applied at one tick, so that camera includes motion with a seq higher than the click. Raw Input batch [move +12, down, move +30]: per-event semantics aims at +12 counts, but the per-tick camera aims at +42, which is 0.66\u00b0 off. Live and replay agree, so E2/E10 do not catch it, but the score is wrong. The sentence also misstates what lateness changes. The camera at a click is a function of the seq prefix and does not depend on lateness. Lateness changes which targets are alive (spawn, despawn and lifetime ticks).",
+    "fix": "State that the shot ray uses `yaw_units/pitch_units` immediately after the last motion record with a lower seq than the click, and that `sim_shot.d_yaw/d_pitch` come from that state. Reword the late-event sentence: applying an event late can change which targets exist and which scoring window applies, never the camera."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a75.3 'exports copy only the valid prefix and append a synthetic session_end'; \u00a78 `source_raw_sha256`; \u00a78.1 inputs `raw_sha256`; \u00a710 'derived tables' source_raw_sha256 matches'",
+    "severity": "medium",
+    "issue": "For a recovered session, the local raw.kflog (prefix plus torn tail) and the exported raw.kflog (prefix plus synthetic end) have different SHA-256s, and the spec does not say which one derived tables and analyses reference. Whichever is chosen, validation fails on one side. Either the imported bundle's derived tables do not match its raw.kflog, or local derived tables do not match the local file. Analyses that cite the session also fail to resolve after export and import.",
+    "fix": "Define the identity of a recovered session as SHA-256(valid prefix \u2016 synthetic session_end). The synthetic end's bytes must be fully determined and stored in raw.recovered.json together with that hash. Derived tables, analyses and the validator use this hash, and the export writes exactly those bytes."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a75.2 'natively the file is held under an exclusive lock \u2026 A held lock means live'; \u00a75.3 'readers honour the sidecar'; ARCH \u00a76 Web",
+    "severity": "medium",
+    "issue": "The web has no defined check for whether a session is still live. Scenario: a second same-origin tab (trainer or analyzer) starts up and sees a session with no session_end. It recovers that session and writes raw.recovered.json while the first tab is still recording. When the first tab later closes normally, readers still 'honour the sidecar'. They truncate a complete session to the prefix that existed at recovery time and label it crashed.",
+    "fix": "On the web, the writing tab holds `navigator.locks.request(session_id)` for the whole session. Recovery requires `ifAvailable` (or a failed `createSyncAccessHandle`) before scanning. Add a rule to \u00a75.3: a sidecar is ignored when raw.kflog contains a CRC-valid session_end after the sidecar's prefix."
+   },
+   {
+    "doc": "ARCHITECTURE.md",
+    "location": "\u00a73 'If it is full they count drops and emit Gap{\u2026} once space frees'",
+    "severity": "low",
+    "issue": "A capture thread runs only when the OS delivers input. A typical pattern is a flick burst that overflows the ring during a recorder stall, after which the mouse goes idle. The pending Gap then waits until the next movement, which may never come if the session ends or crashes. The dropped seqs are at the tail, so no later seq exposes a gap. The loss is invisible to the validator and the commit watermark. When the Gap is finally pushed, its `t_rx` is the time space freed up, not the time of loss. Declare/Device events go through the same droppable ring, so a hot-plug declaration can also be dropped, leaving that source's records undeclared.",
+    "fix": "Keep per-source drop state in atomics shared with the recorder (first_dropped_seq, count, t_first). The recorder writes the gap annotation on each group flush and at stop, without needing a ring slot. Reserve ring capacity, or use a side channel, so Declare/Device/Gap events are never dropped."
+   },
+   {
+    "doc": "ARCHITECTURE.md + DATA_SPECIFICATION.md",
+    "location": "ARCH \u00a76 'A QuotaExceededError ends the session at a chunk boundary with end_reason = storage_error'; DATA_SPEC \u00a76.1 `storage_error`",
+    "severity": "low",
+    "issue": "When the quota or disk is full, the storage_error annotation, the final commit and session_end all need space, so their writes fail too. The main thread has meanwhile posted more chunks asynchronously. The file ends mid-group with no end record, which looks like a crash rather than a clean storage_error end. Native ENOSPC behaves the same way.",
+    "fix": "Reserve space for the end at session start. Natively, use `fallocate(FALLOC_FL_KEEP_SIZE)` or `FileAllocationInfo`, at least 64 KiB, which does not change the file size. On the web, keep a small preallocated reserve file in OPFS and delete it on QuotaExceededError. The worker then drops later chunks, writes the commit plus session_end, and counts the dropped chunks in session_end."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a76.1 session_end '\u2014 last chunk'; \u00a75.2 'each group is followed by a commit chunk'; \u00a710 'end last'",
+    "severity": "low",
+    "issue": "The two rules conflict. If session_end is flushed with the final group, the group's commit follows it, so it is not the last chunk and the validator rejects a cleanly closed file. If it is written after the final commit, \u00a75.3 calls it uncommitted.",
+    "fix": "State the close sequence explicitly: final group, its commit, then session_end as the terminal chunk. Recovery treats a CRC-valid session_end directly after a commit as committed."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a76.3 frame `t_submit_ns, t_present_ns, cpu_ns, gpu_ns`; ARCH \u00a75 'step sim \u2192 record drain/frame \u2192 build SceneView \u2192 encode + submit \u2192 present'",
+    "severity": "low",
+    "issue": "The frame record is written before encode, submit and present. At that point t_submit_ns, the frame's cpu_ns, the GPU timestamp (which arrives frames later) and the present time are all unknown. Append-only fixed-size records cannot be patched afterwards, so these fields are always the unknown sentinel.",
+    "fix": "Write the drain at input time and emit the `frame` record once its timings resolve, possibly several frames later and keyed by `frame`. Alternatively, split out a `frame_timing` kind. Replay depends only on the drain and frame ticks."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a76.3 drain `last_seq u32`; \u00a79.1 'records a drain record (last_seq)' each frame",
+    "severity": "low",
+    "issue": "There is no value for 'nothing consumed yet'. Before the driving source's first event, or just after a re-lock opens a new source, a writer that emits last_seq = 0 tells replay to apply seq 0 in frame 1, even though live consumed it in frame 5.",
+    "fix": "Emit a drain record only for frames that consumed at least one event. A frame without a drain consumed nothing."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a79.2 '(t_ns, source_rank, seq) with source_rank declared in the header'",
+    "severity": "low",
+    "issue": "Sources opened after start have no rank, because the header holds only facts known at start. Every web re-lock source and every hot-plugged device falls in this group, so the cross-source analysis order is undefined for them.",
+    "fix": "Put `source_rank` in each source_declare document, or define rank as the source id."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a76.2 input_button `\u2026, seq u32, source u16, button u8, down u8` (24 B, no flags)",
+    "severity": "low",
+    "issue": "Button records have nowhere to carry flag bit 1 (background, RIM_INPUTSINK) or bit 3 (suspected injected: LLMHF_INJECTED, hDevice == 0). Clicks from an autoclicker or macro look the same as real clicks, which defeats the contamination check exactly where scoring happens.",
+    "fix": "Redefine `down u8` as `state u8`: bit 0 = down, bit 1 = background, bit 2 = suspected injected, bit 3 = clamped. The record stays 24 B."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a76.4 sim_shot `tick u64, t_ns i64, target u32, hit u8, _pad [u8;3], \u2026` (48 B)",
+    "severity": "low",
+    "issue": "A shot is linked to its input only through t_ns. Raw Input stamps one QPC per drain, so in a batch [move, down, move, down] every record shares t_ns. Analytics cannot tell which button record fired the shot or which motion came before it, and flick endpoint and submovement segmentation need exactly that.",
+    "fix": "Add `seq u32` (the driving source is known from the drain): `tick u64, t_ns i64, target u32, seq u32, ang_err f64, d_yaw f64, d_pitch f64, hit u8, _pad[7]` = 56 B."
+   }
+  ]
+ }
+]

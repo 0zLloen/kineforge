@@ -1,0 +1,431 @@
+[
+ {
+  "findings": [
+   {
+    "doc": "STACK_DECISION.md",
+    "location": "\u00a78 Licensing: \"Every selected crate is MIT and/or Apache-2.0 ... No GPL/LGPL\"",
+    "severity": "high",
+    "issue": "The research notes contradict this. rust_math_data.md \u00a7C lists the Parquet codecs the stack selects with other licences: zstd 0.14.4 is BSD-3-Clause (C zstd-sys, used natively per \u00a71 \"zstd native\"), snap 1.1.2 is BSD-3-Clause (the only web codec besides lz4 per \u00a77 \"wasm: snap/lz4 only\"), and brotli 9.1.1 is \"BSD-3-Clause AND MIT\" (a parquet default feature). A cargo-deny allow-list built from this sentence would reject the selected dependency tree, and the licensing section requested by the brief is wrong.",
+    "fix": "Change the sentence to say the tree also contains BSD-3-Clause crates (zstd/zstd-sys, snap, brotli via parquet) and permissive Zlib-style crates. Add BSD-3-Clause to the cargo-deny allow-list. Alternatively, pin parquet to `default-features = false` with only lz4 (and zstd natively) and state that explicitly."
+   },
+   {
+    "doc": "TECH_STACK_RESEARCH.md",
+    "location": "\u00a79 Verification log: \"re-checked 39 decisive claims ... 33 confirmed, 6 partly correct\"; Timer-resolution row \"Safari ... isolated value conflicting between sources (measure)\"",
+    "severity": "medium",
+    "issue": "verification-1.json holds 43 results: 36 confirmed and 7 partly (B1, B2, S2, S3, S6, D1, D5). The section's own corrections table has 7 rows, so \"6 partly\" also contradicts the document itself. S3's corrected statement resolved the Safari value from WebKit source: when the page is cross-origin isolated, allowHighPrecisionTime() makes highTimePrecision() return 20 \u00b5s. The log, and WEB_PLATFORM_RESEARCH \u00a72.4 (\"isolated value conflicting between sources ... UNVERIFIED\"), still present it as unresolved. WEB \u00a78 'Input-timing precision' leaves Safari out entirely.",
+    "fix": "Replace the counts with \"43 claims: 36 confirmed, 7 partly correct, 0 refuted\". Change the Safari entry (TECH_STACK \u00a79 and WEB \u00a72.4) to \"1 ms non-isolated; 20 \u00b5s with COI per WebKit source (verification S3); confirm on hardware (open question 1/B5)\". Add Safari to the WEB \u00a78 timing row."
+   },
+   {
+    "doc": "TECH_STACK_RESEARCH.md",
+    "location": "\u00a75 libm row \"identical results on x86-64, aarch64, wasm32 apart from NaN payloads\"; \u00a76.1 rusqlite row \"sahpool VFS is Worker-only, single connection\"; also STACK_DECISION \u00a73 \"bit-identical simulation on x86-64, aarch64 and wasm32\" and WEB_PLATFORM_RESEARCH \u00a78 \"bit-identical \u2014 E10\"",
+    "severity": "medium",
+    "issue": "\u00a79 says the D5 and S6 corrections were \"applied in these documents\", but the tables still carry the pre-verification wording. D5: libm documents no cross-platform guarantee; bit-identity is inferred from reading the source. S6: opfs-sahpool concurrency is limited rather than absent, and only one VFS instance can exist per origin and directory. STACK_DECISION and WEB \u00a78 also state cross-target bit-identity as an achieved property, although E10 has not run (EXPERIMENT_PLAN: \"Nothing here has been run yet\").",
+    "fix": "\u00a75 libm: \"bit-identity across x86-64/aarch64/wasm32 inferred from source (arch overrides only for exactly-rounded ops), not documented by the crate; confirmed only by the E10 golden-hash test\". \u00a76.1: \"Worker-only; concurrent connections only same-thread or via pauseVfs/unpauseVfs; one VFS instance per origin/directory\". STACK_DECISION \u00a73 and WEB \u00a78: \"designed to be bit-identical; to be verified by E10\"."
+   },
+   {
+    "doc": "WEB_PLATFORM_RESEARCH.md",
+    "location": "\u00a70 item 5 \"Safari defaults to \u224860 Hz rAF\"; \u00a78 rows 'Full 3D aim training' and 'High-refresh rendering' (\"Safari \u224860 Hz default\"); STACK_DECISION \u00a75 item 2 \"Safari \u224860 Hz by default\"",
+    "severity": "medium",
+    "issue": "web_platform.md \u00a74 says the 60 Hz default comes from the 'Prefer Page Rendering Updates near 60fps' flag, then adds: \"Whether Safari 26/27 changed the default is UNVERIFIED\". WEB \u00a74 keeps that caveat, but the conclusion, both matrix rows and the stack-decision limitation present \u224860 Hz as current fact for the Safari versions KineForge targets (WebGPU requires Safari 26).",
+    "fix": "Add the caveat wherever the claim appears: \"\u224860 Hz default documented for Safari \u226418 (flag on by default); Safari 26/27 default UNVERIFIED, see open question 1\". In the \u00a78 matrix cells, write \"unknown (likely \u224860 Hz)\" instead of a flat fact."
+   },
+   {
+    "doc": "WEB_PLATFORM_RESEARCH.md",
+    "location": "\u00a78 Feature matrix, row 'Input-timing precision': Windows native \"supported \u2014 OS timestamps (QPC, evdev monotonic, mach)\"; Linux \"supported\"",
+    "severity": "medium",
+    "issue": "This row labels host timing as an input timestamp. Windows Raw Input has no timestamp field: TECH_STACK \u00a73.1 says \"the app stamps QPC at dequeue\", STACK_DECISION \u00a72.4 scores it 3 \"(QPC at drain)\", and DATA_SPEC \u00a72.1 classes it as meaning `app_dequeue`. On Linux, the default permission-free path (XI_RawMotion) carries X-server ms timestamps (CLOCK_MONOTONIC_COARSE). \u00b5s evdev time requires the `input` group or a udev rule. DATA_SPEC is also internally inconsistent here: \u00a72.1 lists \"QPC\" as a source timestamp (`src_ts_ns`) and separately says Raw Input declares `kind = \"host_receipt\"`, which is not in the `kind` enum. \u00a76.2 says Raw Input `src_ts_ns` is `i64::MIN`.",
+    "fix": "Windows cell: \"supported with limitation \u2014 no per-event OS timestamp; QPC at app drain (app_dequeue); GameInput \u00b5s base UNVERIFIED (W4)\". Linux cell: \"supported with limitation \u2014 default XI2 path ms (os_dispatch); kernel \u00b5s via evdev requires permission\". In DATA_SPEC, pick one rule: Raw Input `src_ts_ns = i64::MIN` with QPC only in `t_ns`. Remove \"QPC\" from the src_ts examples and the undefined `host_receipt` kind."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a77 Session header example: source 0 `\"units\": \"css_px\", \"value_scale\": 1024, \"processing\": [..., \"fractional\"]`; clock domain `{\"kind\": \"dom_event_timestamp\", \"resolution_ns\": 100000}`",
+    "severity": "medium",
+    "issue": "The example is Chromium 156 on Linux X11 with `browser_locked`. Per _browser.md \u00a76.4 and WEB_PLATFORM_RESEARCH \u00a72.3, Chrome's adjusted movementX on Linux is integer DIP (`long`, truncated positions): it is not CSS px and not fractional. Per WEB \u00a72.4 and _browser.md \u00a76.6, Chrome X11 event timestamps are X-server time in ms, so the effective resolution is 1 ms and the meaning is OS dispatch, not 100 \u00b5s. `dom_event_timestamp` is also not one of the `kind` values declared in \u00a72.1 (`browser_perf`). The canonical example therefore teaches the wrong unit and timing labels for exactly the browser/OS combination the project measures first.",
+    "fix": "Set source 0 to `\"units\": \"dip\", \"value_scale\": 1`, remove `fractional`, and keep `os_accel_state_unknown` (or record the libinput profile). Set clock domain 1 to `{\"kind\": \"browser_perf\", \"coi\": false, \"meaning\": \"os_dispatch\", \"resolution_ns\": 1000000, ...}`, with a note that X-server ms are then coarsened to 100 \u00b5s."
+   },
+   {
+    "doc": "AIMLABS_RESEARCH.md",
+    "location": "\u00a74 row \"Aimlabs FOV field with the CS profile behaves like Source 4:3 Hor+ | community report ... matches exactly | INFERRED (community observation + exact match)\"",
+    "severity": "medium",
+    "issue": "This states an Aimlabs-specific FOV mapping. The doc's own label table defines INFERRED as \"Reasoned from verified facts\", but the only premise is one unverified community report at one aspect ratio (16:9). The notes (aimlabs.md \u00a77) treat 4:3 Hor+ as the *prediction* that AL-E2 will test. Labelling it INFERRED sits badly with \u00a71 item 1 (\"No Aimlabs-specific constant, formula ... is claimed here\") and with the brief's rule that inferred constants need an experiment and a confidence level.",
+    "fix": "Relabel the row REQUIRES FURTHER VALIDATION (single community report, one aspect ratio). Phrase it as a hypothesis: \"community report consistent with Source 4:3-basis Hor+; to be tested by AL-E2 at \u22652 aspect ratios\". Do not implement it as an Aimlabs profile until AL-E2 has a result with an experiment ID."
+   },
+   {
+    "doc": "STACK_DECISION.md",
+    "location": "\u00a74 Input decision, Linux X11 default: \"\u2192 `os_unaccelerated` (= libinput unaccel = counts on Xorg+libinput; ...)\"",
+    "severity": "medium",
+    "issue": "This asserts that XI2 raw equals device counts. The project's own rules treat that as unestablished. DATA_SPEC \u00a73.1 allows an `os_unaccelerated` stream to be treated as counts only after a dual-source ratio test (`counts_equivalent_verified`). EXPERIMENT_PLAN E1 lists it under \"Expected outcomes ... not yet measured\". Verification A2 notes that configured rotation applies to unaccelerated motion, and TECH_STACK \u00a73.1 notes Xwayland scaling. EXPERIMENT_PLAN's 'Cheapest first pass' also presupposes the result: \"It establishes the XI2-raw = counts identity\".",
+    "fix": "Write \"(predicted to equal HID counts on Xorg+libinput with no rotation; unconfirmed until the L1/E1 hidraw dual-source test)\". In EXPERIMENT_PLAN, change \"establishes\" to \"tests\"."
+   },
+   {
+    "doc": "OPEN_DIRECTIONAL_DPI_AUDIT.md",
+    "location": "Executive summary \"saturated output is carried and released later\"; \u00a73.6 \"# excess beyond the clamp is CARRIED\"; \u00a76 item 2; also DATA_SPECIFICATION \u00a77 \"saturation policy (`carry` as in ODD, or `drop`)\"",
+    "severity": "low",
+    "issue": "Verification O1 confirmed the carry but added a limit the docs leave out. The remainder saturates at \u00b12147418112 Q16.16 (\u2248 one extra report, 32767 counts), and anything beyond that is still dropped. In O1's 16\u00d7 test, about 414k of 480k counts were lost. ODD's policy is therefore capped carry, not pure carry, and DATA_SPEC's binary `carry`/`drop` enum cannot record ODD's actual behaviour.",
+    "fix": "State: \"excess is carried up to \u224832767 counts (one report) and dropped beyond that (verification O1: 414k of 480k counts lost in a 16\u00d7 test)\". Name the DATA_SPEC policy `carry_capped` (ODD) and keep `drop`, so a simulation of ODD records its true semantics."
+   },
+   {
+    "doc": "STACK_DECISION.md",
+    "location": "\u00a73 \"egui: ... negligible cost at HUD scale and 360 Hz\" (also TECH_STACK_RESEARCH \u00a74 \"negligible cost at 360 Hz for HUD-sized UIs\")",
+    "severity": "low",
+    "issue": "This is a performance claim with no measurement behind it. rust_render_ui.md says only \"cheap for HUD-sized UIs\" and lists achievable rates at 144\u2013360 Hz as unverified. The claim still feeds the UI matrix score (Hi-refresh = 5).",
+    "fix": "Rephrase as an expectation (\"expected to be small at HUD scale; unmeasured\"). Add a check to PERFORMANCE_PLAN N1/W5 that reports the egui pass's share of CPU frame time at 360 Hz (H2) or 165 Hz (H1)."
+   },
+   {
+    "doc": "AIMLABS_RESEARCH.md",
+    "location": "\u00a79 \"KineForge's camera is frame-rate-independent by construction (verified by E2)\"; also EXPERIMENT_PLAN E7 \"Hardware/OS noise is measured by E1 and E0 and is orders of magnitude smaller than human variability\"",
+    "severity": "low",
+    "issue": "Both sentences present results of experiments that have not run as established facts. EXPERIMENT_PLAN's header says \"Nothing here has been run yet\", and AIMLABS's own label table says nothing is EXPERIMENTALLY OBSERVED. \"Orders of magnitude smaller\" has no source in the notes.",
+    "fix": "Write \"to be verified by E2 (CI)\". For E7, write \"expected to be much smaller than human variability; confirm by comparing E0/E1 residuals with the pilot within-subject SD before relying on it\"."
+   }
+  ]
+ },
+ {
+  "findings": [
+   {
+    "doc": "DATA_SPECIFICATION.md (+ ARCHITECTURE.md \u00a74)",
+    "location": "\u00a75 'total order is restored by (t_ns, kind priority, seq)'; \u00a79 'Input replay: re-emits input records'; ARCHITECTURE \u00a74 '(t_ns, source priority, seq)'",
+    "severity": "high",
+    "issue": "Phase 4 asks for replay ordering and timing, and the docs promise bit-identical replay (E2/E10), but the replay inputs are not fully defined. (1) The tie-break 'kind priority' (DATA_SPEC) or 'source priority' (ARCHITECTURE) is named but never defined, and the two docs disagree. A Raw Input RAWMOUSE packet or an evdev SYN frame carries motion and a button change with the same timestamp, so whether the click's hit test sees that report's motion is unspecified. (2) ARCHITECTURE \u00a73 runs several capture backends at once for contamination checks, but the header does not record which source drives the simulation. (3) Live, the sim steps to 'now' after the drain. An event stamped before 'now' but still queued gets applied a frame late, while replay applies it at its own t_ns tick, so live and replay can disagree. (4) The trial pauses on lock, focus, visibility or context loss (WEB \u00a72.6, W8), and settings_changed exists, but replay only re-emits input records. Paused intervals and setting changes are therefore not reproduced.",
+    "fix": "Add a 'Replay inputs and ordering' subsection to DATA_SPEC \u00a79, mirrored in ARCHITECTURE \u00a74. It should: define one numeric kind order and use it in both docs (e.g. sim-control annotation < motion < wheel < button for equal t_ns), state that seq is shared across kinds within a source, and fix the convention 'motion before button within one report'; add `simulation.driving_source: <source id>` to the header (changes recorded as an annotation) and say that replay feeds only that source; define the late-event rule, either by stepping the sim only to a per-source t_rx watermark (capture threads send heartbeats) or by flagging late events (free flags bit 6) together with the tick they were applied at; and list which annotation codes are sim inputs (pause/resume, context_lost, settings_changed) so replay feeds them, or add an explicit `sim_control` record (tick, pause|resume|abort|settings)."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a73.2 'app_reported'; \u00a77 header ('app': kineforge-trainer only); \u00a79 'Third-party sessions: only input records and app-reported results exist'",
+    "severity": "high",
+    "issue": "Phase 4 requires a 'source app' field and a distinct app-reported class. The spec defines the evidence class but nothing that carries it. There is no record kind or derived table for app-reported results (score, hits, misses, duration, reaction time transcribed from a results screen). The header cannot name a third-party source application (Aimlabs build or appid, Proton version, game profile, in-app sensitivity/FOV/ADS as entered). There is also no mapping for imported external recordings: MouseTester CSV and KovaaK's Stats.csv, which ODD audit \u00a79 marks reusable, and host-side evdev or hidraw logs captured while playing. EXPERIMENT_PLAN E9 and AIMLABS AL-E3 say their results go into this format, but there is nowhere to put them.",
+    "fix": "Add \u00a77.1 'External sessions': header `source_app {name, version/build, platform, compat_layer (e.g. Proton 11), settings_as_entered{\u2026}}`, with every field `evidence_class: app_reported`, plus `capture_method` (manual transcription / screenshot / owner-documented export). Add record kind 0x30 `app_result` (UTF-8 JSON: t_ns, metric name, value, unit, transcribed_by, method) and a derived table `app_results.parquet`. Add an import table: MouseTester CSV \u2192 source `input_level os_raw_counts` (Windows Raw Input), clock_domain `host_receipt` (ms); KovaaK's Stats.csv \u2192 app_result rows; with the rule that camera and target tables stay absent."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "DATA_SPEC \u00a77 '\"experiment\": null'; ARCHITECTURE \u00a72 'experiment configs are a kf-sim scenario feature'",
+    "severity": "high",
+    "issue": "The brief requires an experiment module with listed responsibilities (Phase 3) and an experiment-config schema (Phase 4). EXPERIMENT_PLAN \u00a70.3 and E7 require warm-up exclusion, ABBA or Latin-square counterbalancing, a pre-registered hypothesis, primary metric and analysis written before collection, recorded deviations, multiple sessions per participant, and condition and block identity. None of these has a home. The header field is always null in the example, no annotation codes mark block or condition boundaries, and no crate is responsible for building condition schedules.",
+    "fix": "In ARCHITECTURE \u00a72, give kf-sim an explicit `experiment` module (pure and wasm-compatible). Its job: build the seeded condition and block schedule (counterbalancing row), flag warm-up blocks, and emit block_start/block_end/condition annotations. In DATA_SPEC \u00a77, define `experiment {id, protocol_version, prereg {hypothesis, primary_metric, analysis_plan_sha256, registered_at}, participant_pseudonym (random, never PII), session_index, condition_id, block_index, block_order_scheme, warmup, deviations[]}` and add the matching annotation codes to \u00a76.1."
+   },
+   {
+    "doc": "WEB_PLATFORM_RESEARCH.md + EXPERIMENT_PLAN.md + ROADMAP.md",
+    "location": "WEB \u00a78 row 'Local calibration \u2026 supported with limitation \u2014 \u2026 calibration results carry the lower input level'; EXPERIMENT_PLAN E8; ROADMAP M11",
+    "severity": "high",
+    "issue": "Phase 0.9 asks whether calibration on OS- or browser-processed streams is meaningful. The docs only label such results and never decide it. Directional-gain fitting compares per-direction endpoint ratios. Under `browser_locked` (accelerated, which is every Linux browser), gain depends on speed, and flick speed varies with distance and direction, so acceleration gets fitted as directional error. The notes already conclude 'per-device calibration must happen natively or through WebHID vendor channels' (_browser.md:376), and the docs contradict that. E8 sets no required input level, and M11 can export a firmware profile fitted from any source.",
+    "fix": "Add a 'Calibration validity by input level' rule to WEB \u00a72 and EXPERIMENT_PLAN E8. Fitting and firmware export are allowed only from `device_report`, `os_raw_counts`, `os_unaccelerated` with no acceleration, or `browser_locked_unadjusted`. Constant unit scaling (DIP, DPR, unverified macOS units) is allowed only with mean-preserving normalisation, and the scale factor is recorded. `browser_locked` data is shown as indicative only, and profile export is blocked. Add an E8 step that fits the same flicks from hidraw2 and from the browser stream recorded at the same time (runnable locally) and compares the two profiles. Make the export gate an M11 acceptance criterion."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a74 Session bundle / \u00a78 Derived data (per-session only)",
+    "severity": "medium",
+    "issue": "Phase 4 lists 'calibration profiles' and 'statistical results'. The spec covers only per-session bundles and the profile *applied* in a session (\u00a77). The outputs of kf-calib (a fitted profile from N sessions, its held-out validation report, required by M11) and cross-session statistics (E7 mixed-effects results, E10 equivalence reports, kf-analytics 'cross-session comparison') have no container and no provenance rules.",
+    "fix": "Add \u00a78.1 'Analysis artifacts': `analyses/<uuidv7>/manifest.json {kind: calibration|study|equivalence, inputs:[{session_id, raw_sha256}], algorithm, algorithm_version, params, evidence_class (derived/inferred), input_levels_used}` plus outputs: Parquet tables, the ODD 28-byte profile + JSON for calibration, validation statistics. Include these in the .kfz export and validator rules (input hashes must resolve)."
+   },
+   {
+    "doc": "WEB_PLATFORM_RESEARCH.md (+ TECH_STACK_RESEARCH.md)",
+    "location": "Header 'Primary sources: W3C/WHATWG specs (WebGPU ED 2026-11-10, \u2026)'; \u00a71.1 'gpuweb wiki 2026-10-02 + BCD'",
+    "severity": "medium",
+    "issue": "The brief explicitly requires official links in WEB_PLATFORM_RESEARCH, and the working rule is 'record URLs + access dates'. The document has zero URLs. Sources are named only, e.g. Chrome's 100 \u00b5s timestamp quantisation, Safari's 7-day ITP rule and the Cloudflare/Netlify `_headers` support. TECH_STACK_RESEARCH contains only the crates.io API template and defers everything to the notes, so decisive claims (winit #1194/#4581, wgpu #9937, Azure signing 'secondary source') cannot be checked from the deliverable.",
+    "fix": "Add a 'Sources (accessed 2026-11-13/14)' section to WEB_PLATFORM_RESEARCH, copied from research/notes/web_platform.md \u00a712 and the _browser.md 'Sources' list (gpuweb Implementation-Status wiki, gpuweb.github.io/gpuweb, w3c.github.io/pointerlock, w3c.github.io/hr-time, fs.spec.whatwg.org, hid.spec.whatwg.org, MDN storage quotas, webkit.org/blog/14403, Cloudflare/Netlify headers docs, web3dsurvey). In TECH_STACK_RESEARCH, add inline links for every claim re-checked in verification-1.json and for the issue numbers cited in \u00a72.1 and \u00a73.2."
+   },
+   {
+    "doc": "WEB_PLATFORM_RESEARCH.md + PERFORMANCE_PLAN.md",
+    "location": "WEB \u00a72.6 Lock lifecycle / \u00a75 Storage; PERFORMANCE_PLAN \u00a73 (W1\u2013W9)",
+    "severity": "medium",
+    "issue": "Hard requirement 23 (graceful degradation) and Phase 0.7 (feature detection and fallback messaging) are thin. Only the unadjusted\u2192adjusted fallback is specified. Nothing defines behaviour when: Pointer Lock is unavailable or keeps being refused (iframe without permission, repeated SecurityError, touch-only device); neither WebGPU nor WebGL2 works, in which case the egui-only UI cannot even draw an error message; OPFS is unavailable or write() throws QuotaExceededError mid-session; or OPFS evicts sessions that were never exported. PERFORMANCE_PLAN lists 'browser storage limits' in the brief but has no target or test for them.",
+    "fix": "Add WEB \u00a72.7/\u00a75.1 'Degradation matrix' with columns capability failure \u2192 behaviour \u2192 user message \u2192 telemetry label. Proposed rows: no lock \u2192 aiming tasks disabled, import, analytics and converter still work, `browser_unlocked` never used for aiming; no GPU \u2192 static HTML message in index.html (not egui), plus non-3D tools; storage failure \u2192 stop recording at a chunk boundary with `end_reason = storage_error` and prompt export; on startup, report sessions missing from OPFS and list unexported ones. Add PERFORMANCE_PLAN W10: quota exhaustion forced via CDP `Storage.overrideQuotaForOrigin` gives zero corrupt chunks and a valid recovered session. Put it in the ROADMAP M8 acceptance."
+   },
+   {
+    "doc": "STACK_DECISION.md + ROADMAP.md",
+    "location": "STACK_DECISION \u00a71 Language/toolchain row; ROADMAP M1 and M13 acceptance",
+    "severity": "medium",
+    "issue": "Reproducible builds is a hard requirement and a Phase 0.7 topic, but the docs cover only toolchain pinning, `--locked` and the remap-path-prefix flag (TECH_STACK \u00a77). No doc defines what 'reproducible' means (bit-identical artifacts or only identical dependency sets; which artifacts are excluded, e.g. signed MSI/notarised .app), and no milestone verifies it.",
+    "fix": "Add a 'Reproducible builds' row/paragraph to STACK_DECISION covering: the target level (bit-identical unsigned native binaries and the web bundle from the same commit on the same runner image); the measures (`--remap-path-prefix` for workspace and CARGO_HOME, SOURCE_DATE_EPOCH for archives and ZIP mtimes, wasm-bindgen and binaryen pinned from Cargo.lock / version_133, no target-cpu=native); and the exclusions (signatures, notarisation tickets). ROADMAP M1 acceptance: a CI job builds kf-core/kf-dirgain (native and wasm) twice in different directories and the SHA-256s match (diffoscope on mismatch). M13: the same check for release artifacts, with hashes published next to the SBOM."
+   },
+   {
+    "doc": "AIMLABS_RESEARCH.md + ARCHITECTURE.md",
+    "location": "AIMLABS \u00a78 'configurable scoring framework (in kf-sim)\u2026 Metric library\u2026 smoothness (\u2026 spectral arc length)\u2026 Fitts throughput'; ARCHITECTURE \u00a72 kf-sim 'scoring models' vs kf-analytics 'Fitts throughput, smoothness'",
+    "severity": "medium",
+    "issue": "Phase 2.4 and Phase 3 (no circular dependencies) leave scoring placement unresolved. Score models in kf-sim are 'declarative compositions' over a metric library that includes Fitts throughput and smoothness, which ARCHITECTURE puts in kf-analytics. kf-sim does not depend on kf-analytics, and kf-analytics consumes sim output, so either the dependency inverts or the metrics are duplicated. It also conflicts with TECH_STACK \u00a75.1, which requires 'official scores' to be bit-exact (basic ops + libm) while FFT-based or fitted analytics are tolerance-based ('never in scored paths').",
+    "fix": "Split the AIMLABS \u00a78 metric list in two. Score-eligible exact metrics live in a kf-sim `score` module and use only exact ops: accuracy, hits/kills per second, time-to-hit/acquire, angular error at shot, on-target ticks. Analytics-only metrics (smoothness/SAL, Fitts throughput, cross-correlation lag) live in kf-analytics. State in ARCHITECTURE \u00a72 that score models may reference only the first group, that kf-analytics may depend on kf-sim's score types but never the reverse, and that the validator rejects scenario files whose score references an analytics-only metric."
+   },
+   {
+    "doc": "AIMLABS_RESEARCH.md + ROADMAP.md",
+    "location": "AIMLABS \u00a75 family table; ROADMAP M10 'families: static flick, centre-out, switching, reflex, precision, smooth tracking, reactive tracking'",
+    "severity": "medium",
+    "issue": "Phase 2.3 lists 'static/dynamic flick' and 'pacing'. Every flick family is static. There is no generalised model for flicking to a moving target (intercept or lead), even though AIMLABS \u00a75 itself mentions moving-target tasks (Motionshot). Pacing (spawn cadence or time pressure as a difficulty axis) is not a named parameter of any family.",
+    "fix": "Add a 'Dynamic flick' family to AIMLABS \u00a75 and ROADMAP M10. Parameters: seeded target speed distribution, velocity direction relative to the flick vector (toward/away/tangential), analytic path (constant velocity or arc), lifetime. Metrics: endpoint error relative to the target position at click t_ns, signed lead/lag along target velocity, time-to-hit vs speed. Add `pacing` (spawn interval or time budget) to the shared parameter list, and make target velocity a factor in the EXPERIMENT_PLAN E7 flick design."
+   },
+   {
+    "doc": "EXPERIMENT_PLAN.md + ROADMAP.md",
+    "location": "E2 (camera rotation only); ROADMAP M7/M8 acceptance ('readback hash')",
+    "severity": "medium",
+    "issue": "Phase 7 (angular displacement, cross-platform consistency) and Phase 0.2 (the difference between camera rotation and the rendered crosshair) are validated only inside the simulation. Nothing checks that the f32 renderer projects targets where the f64 sim says they are. That covers FOV axis and Hor+/Vert\u2212 aspect handling, crosshair pixel-snapping offset, DPR on the web, and WebGL2 vs WebGPU vs native backends. A mismatch would make sim hit tests disagree with what the user sees. E4 runs this check on the reference app but not on KineForge, and a readback hash only detects regressions on one backend.",
+    "fix": "Add an EXPERIMENT_PLAN E11 'Render\u2013simulation geometric consistency' test, pure and run in CI. Headless wgpu renders targets at known (\u0394\u03c8, \u0394\u03b8) and radii at 16:9, 16:10, 4:3 and 21:9, at even and odd resolutions, and with DPR 1 and 1.25 (web). Read back the pixels and assert that the centroid equals W/2 + f\u00b7tan(\u0394\u03c8) within 0.5 px, that the silhouette radius matches the sim's angular radius, and that the crosshair offset is \u2264 0.5 px (record the offset in the header). Run on Vulkan, DX12, Metal, WebGPU-SwiftShader and WebGL2. Add it to the M7 and M8 acceptance criteria."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a74 export (.kfz contains read_kflog.py); \u00a711 Validation; \u00a712 Privacy",
+    "severity": "medium",
+    "issue": "Import is treated as trusted, which the privacy and security parts of Phase 0.6/0.9 do not cover. Bundles get imported in the browser and natively, and ROADMAP \u00a7F plans shareable exports. The validator has no limits for hostile input: payload_len versus file size, record_count \u00d7 record size = payload_len, total uncompressed size against quota, ZIP member names with paths or '..', non-STORED members, duplicate members. Every bundle also ships a Python script that recipients are invited to run, which makes a shared bundle a vehicle for code execution.",
+    "fix": "Add \u00a711.1 'Untrusted input' with these rules: bound every length by the remaining bytes; require record_count \u00d7 layout size == payload_len; accept only flat, STORED, unique member names from a fixed allow-list; check the declared size against storage quota before writing to OPFS; cap the JSON header size. In \u00a74/\u00a712, publish read_kflog.py and FORMAT.md at a fixed URL with SHA-256 listed in FORMAT.md, and tell recipients to verify the hash rather than run the copy inside a received bundle (or ship it as text documentation only)."
+   },
+   {
+    "doc": "ARCHITECTURE.md",
+    "location": "\u00a73 'Threading' and \u00a75 frame loop",
+    "severity": "low",
+    "issue": "Phase 0.3 lists thread scheduling and frame pacing. ARCHITECTURE puts every capture backend on its own thread but leaves out the priority policy. The notes' design table already specifies THREAD_PRIORITY_TIME_CRITICAL for the Raw Input thread (input.md:1243, SDL's pattern), and experiment L4 shows a normal-priority evdev reader overflows its ring after stalls over ~5 ms. Nothing says how a native frame cap is implemented or recorded either, yet E5 uses 'frame cap on/off' as a condition.",
+    "fix": "In \u00a73, specify per-OS capture-thread priority: Windows TIME_CRITICAL; Linux, try SCHED_FIFO or rtkit, otherwise nice, and record the level granted; macOS, USER_INTERACTIVE QoS for the IOHID run-loop thread. Record the granted priority in the session header, and make priority a factor in L4. In \u00a75, define the frame-cap mechanism: present-mode pacing, or a high-resolution timed wait plus a short spin, with Windows high-resolution waitable timers to be verified. Record `frame_cap_hz` in the header."
+   },
+   {
+    "doc": "ARCHITECTURE.md",
+    "location": "\u00a78 'How future apps reuse the libraries' (7 rows)",
+    "severity": "low",
+    "issue": "Phase 5 names 14 future applications. ARCHITECTURE \u00a78 maps only 7. Apps that ROADMAP \u00a7F names (flick/tracking analyzers, data-visualisation app, experiment environment, firmware calibration/validation tools, benchmark sharing) have no links / does-not-link mapping. Nothing states which apps also run on wasm. There is also no statement that kf-analytics kernels work in counts or mm, which the 'Mouse analyzer (no 3D)' row needs because it links kf-analytics without kf-sim.",
+    "fix": "Extend the \u00a78 table to all 14 apps from the brief and add a 'targets (native/wasm)' column. Add one sentence to the kf-analytics row in \u00a72: kernels take 2-D time series with a declared unit (counts, mm, rad) and never assume a camera or 3-D scene."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a712 Privacy ('The default build contains no upload path')",
+    "severity": "low",
+    "issue": "Phase 0.6 lists 'optional future sync', and no doc addresses it. The design already supports conflict-free sync (immutable raw log, UUIDv7, SHA-256 references), but nothing records the constraints a future sync must respect. In particular, the CSP `connect-src 'self'` guarantee in WEB \u00a76 would have to change.",
+    "fix": "Add a short \u00a712.1 'Future sync (not in v1)'. Sync is opt-in, a separate feature or build, and an append-only set union of immutable bundles keyed by session_id + raw_sha256 (no merge). Derived files are regenerated, never synced as truth. It reuses the privacy export profile. Enabling it requires an explicit CSP connect-src change, listed in WEB \u00a76."
+   }
+  ]
+ },
+ {
+  "findings": [
+   {
+    "doc": "ARCHITECTURE.md + DATA_SPECIFICATION.md",
+    "location": "ARCHITECTURE \u00a74 \"(t_ns, source priority, seq)\" vs DATA_SPECIFICATION \u00a75 Writing / \u00a79 \"(t_ns, kind priority, seq)\"",
+    "severity": "high",
+    "issue": "The two documents give different total-order keys for input replay. Neither key is safe. Raw Input stamps one QPC per GetRawInputBuffer drain (STACK_DECISION \u00a74, DATA_SPEC \u00a76.2 batch_ix), so every record in a drain has the same t_ns. With DATA_SPEC's key, kind priority sorts before seq, so a click in the middle of an 8 kHz batch moves before or after all motion in that batch. The hit test then sees a different camera state from the one the user produced, and live vs replay bit-identity (E2/E10) depends on which key the live loop used. ARCHITECTURE's key has no kind component, and `seq` is not compared across sources. Neither document says which source drives the camera when several backends run at once (ARCH \u00a73 'Several backends may run simultaneously'). Replaying every source would double-count motion. Field widths also disagree: `seq` is u64 in ARCH `Motion` and u32 in the KFLOG records.",
+    "fix": "Use one key in both docs, for example `(t_ns, source_priority, seq)`. Make `seq` a single per-source counter shared by motion, button and wheel records, assigned in arrival order (motion before button within one HID report), and drop kind priority. Add a header field such as `simulation.input_source: <source id>`, and state in ARCH \u00a74 and DATA_SPEC \u00a79 that only that source feeds kf-sim live and in replay. Pick one width for `seq` (u32 on disk with defined wrap handling, or u64 in both)."
+   },
+   {
+    "doc": "EXPERIMENT_PLAN.md",
+    "location": "E3 \u2014 \"Permitted method only: send known counts through a documented input path; observe screen output\"",
+    "severity": "high",
+    "issue": "E3 calls programmatic count injection plus automated frame capture and cross-correlation the 'permitted method'. AIMLABS_RESEARCH \u00a76.3 classifies exactly this ('Synthetic input (uinput / USB-HID microcontroller) + automated capture/analysis') as **Grey**: allowed only after legal review or written consent. AIMLABS \u00a77 and STACK_DECISION \u00a76 item 7 also make it a precondition. E3 (and E4 and E9, which reuse it) gives no such gate, so the experiment plan contradicts the legal analysis.",
+    "fix": "In E3 replace 'Permitted method only' with the AIMLABS \u00a76.3 status. State the preconditions (Aimlabs launched by the user, guest/offline mode, no score submission, legal review or Statespace consent before any automated injection or capture). Mark E3, E4 and the black-box part of E9 as blocked on STACK_DECISION \u00a76 item 7."
+   },
+   {
+    "doc": "PERFORMANCE_PLAN.md + DATA_SPECIFICATION.md + ARCHITECTURE.md",
+    "location": "PERFORMANCE_PLAN N9 \"default 250 ms ... SIGKILL/power-loss\" vs DATA_SPEC \u00a75 \"4096 records or 100 ms\" / \"fdatasync at most every 1 s\" vs ARCH \u00a76 \"fdatasync \u22641 s\"",
+    "severity": "high",
+    "issue": "Three different durability intervals are stated. DATA_SPEC \u00a75 Recovery says loss is 'bounded by the flush interval (PERFORMANCE_PLAN N9)', but N9's 250 ms default matches neither the 100 ms chunk flush nor the 1 s fdatasync. On power loss the bound is the fdatasync interval (1 s), so N9 cannot pass on power loss as specified. ROADMAP M4 makes N9 an acceptance gate.",
+    "fix": "Split N9 into two targets that match the writer. On SIGKILL or tab close, loss \u2264 chunk flush interval (100 ms) plus one in-flight chunk. On power loss, loss \u2264 fdatasync / OPFS `flush()` interval (1 s). Alternatively lower fdatasync to 250 ms in DATA_SPEC \u00a75 and ARCH \u00a76. Use the same numbers in all three docs."
+   },
+   {
+    "doc": "EXPERIMENT_PLAN.md + DATA_SPECIFICATION.md + AIMLABS_RESEARCH.md",
+    "location": "EXPERIMENT_PLAN intro \"with `evidence_class` set honestly (see \u00a70.2)\" and \u00a70.2 \"Evidence classes (shared with AIMLABS_RESEARCH.md)\"; DATA_SPEC \u00a73.2 `evidence_class`; AIMLABS \"Evidence labels\"",
+    "severity": "medium",
+    "issue": "Two unrelated taxonomies share the name 'evidence class'. EXPERIMENT_PLAN says the telemetry field `evidence_class` takes the \u00a70.2 values (VERIFIED / EXPERIMENTALLY OBSERVED / INFERRED / UNKNOWN / REQUIRES FURTHER VALIDATION). DATA_SPEC \u00a73.2 defines that field as observed / app_reported / inferred / simulated_truth / derived. \u00a70.2 claims to be 'shared' with AIMLABS, but AIMLABS has a sixth label, COMMUNITY-ESTABLISHED, which its \u00a74 rule requires for sensitivity-profile constants. ROADMAP M3 puts an `EvidenceClass` enum in kf-core and asks every sensitivity constant to carry its 'evidence label', so it is unclear which enum that is.",
+    "fix": "Keep `evidence_class` (DATA_SPEC \u00a73.2) for data provenance only. Rename the claim-status taxonomy, for example `claim_status`, and define it once with all six AIMLABS labels including COMMUNITY-ESTABLISHED. EXPERIMENT_PLAN \u00a70.2 and AIMLABS should reference that definition. Fix the EXPERIMENT_PLAN intro sentence, and have ROADMAP M3 name both enums (`EvidenceClass` for data, `ClaimStatus` for profile constants)."
+   },
+   {
+    "doc": "EXPERIMENT_PLAN.md, PERFORMANCE_PLAN.md, STACK_DECISION.md, ROADMAP.md, TECH_STACK_RESEARCH.md",
+    "location": "P-catalogue IDs L1\u2013L7/M1\u2013M4/W1\u2013W6/H1\u2013H4; STACK_DECISION \u00a74 \"(M1)\", \"(W4)\"; PERFORMANCE_PLAN \u00a75 column \"W1 Chromium\", \"W4 Safari\"; ROADMAP intro \"'H1' etc. refer to hardware classes\"",
+    "severity": "medium",
+    "issue": "The same identifiers mean different things in different documents. M1 is the macOS units experiment (STACK \u00a74 'undecided until measured on Mac hardware (M1)') and also ROADMAP milestone M1 (toolchain/CI), which ROADMAP M6a points back to. W4 is GameInput timestamps (STACK \u00a74, EXPERIMENT W4), the rAF-cadence target (PERFORMANCE \u00a73), and 'browser on H4' (PERFORMANCE \u00a75 column). W1 is transfer size (PERFORMANCE W1, \u00a76 'Size (W1)'), the browser on H1 (\u00a75 column), and Raw Input pass-through (EXPERIMENT W1). H1 is a hardware class (PERFORMANCE \u00a71, ROADMAP) and a hidapi experiment (EXPERIMENT H1). L1\u2013L7 are pipeline layers (TECH \u00a73.4, DATA_SPEC \u00a73.1, ARCH \u00a73 'an L1 source', 'L5') and Linux experiments. EXPERIMENT_PLAN's 'Cheapest first pass (L1, L2, B1\u2013B5, B11)' sits next to 'Passive L1 tap'.",
+    "fix": "Give the platform experiment catalogue a prefix, for example `X-L1\u2026X-L7`, `X-M1\u2026`, `X-W1\u2026`, `X-H1\u2026`, `X-R1\u2026`, `X-B1\u2026`. Keep bare L1\u2013L7 for layers, M0\u2013M13 for milestones, H1\u2013H5 for hardware classes and N/W for performance targets. Rename the PERFORMANCE \u00a75 columns to 'Web @ H1 Chromium' etc. Update STACK \u00a74 ('X-M1', 'X-R6', 'X-W4'), WEB \u00a78/\u00a710 and ROADMAP M8 ('X-B1, X-B5, X-B7')."
+   },
+   {
+    "doc": "AIMLABS_RESEARCH.md",
+    "location": "\u00a71 item 4 \"to be confirmed by experiment E0\"; \u00a73 \"Which path drives mouse-look: UNKNOWN \u2192 experiment E0\"; \u00a74 Rule \"until experiment E1 produces one\"; \u00a77 \"uinput is acceptable for E0\"",
+    "severity": "medium",
+    "issue": "These are leftover IDs from research/notes/aimlabs.md, where E0 and E1 were the Aimlabs experiments. The doc's own table renamed them AL-E0 (input-path identification) and AL-E1 (yaw per count), but the prose still says E0/E1, and AIMLABS links to EXPERIMENT_PLAN, where E0 is clock characterisation and E1 is count fidelity. A reader following 'E1 produces' the Aimlabs scale ends up at the wrong procedure (the yaw-per-count procedure is EXPERIMENT_PLAN E3). The \u00a77 line 'Full procedures: EXPERIMENT_PLAN.md E1, E3, E4, E5, E9' does not map the experiments one to one: AL-E0 and AL-E5 have no EXPERIMENT_PLAN procedure.",
+    "fix": "Replace the four bare references with AL-E0 / AL-E1. Add a column to the \u00a77 table mapping each AL-E* to its EXPERIMENT_PLAN entry (AL-E1\u2192E3, AL-E2\u2192E4, AL-E3\u2192E9, AL-E4\u2192E5). Either add procedures for AL-E0 and AL-E5 to EXPERIMENT_PLAN or mark them 'procedure in research/notes/aimlabs.md \u00a77 only'."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a72.1 Time \u2014 clock-domain `kind` list; note \"declares `kind = \\\"host_receipt\\\"`\"; \u00a76.2 \"i64::MIN if none \u2014 e.g. Windows Raw Input, hidraw\"; \u00a77 example `\"kind\": \"dom_event_timestamp\"`",
+    "severity": "medium",
+    "issue": "The clock-domain enum does not match how the document uses it. `host_receipt` and `dom_event_timestamp` are used but are not in the `kind` list (the browser value listed is `browser_perf`). Windows Raw Input gets three conflicting treatments: the table gives it `win_qpc` with meaning `app_dequeue` ('Raw Input QPC at drain, hidraw read()'), the following note gives it `kind = \"host_receipt\"`, and \u00a76.2 says its `src_ts_ns` is `i64::MIN` (none); hidraw has the same conflict. The \u00a77 example domain omits the required `meaning` and `drift_ppm`. EXPERIMENT_PLAN E0 says it populates `timestamp_uncertainty_ns`, but the field is named `offset_uncertainty_ns`.",
+    "fix": "Choose one model. Suggested: sources without their own stamp have `src_ts_ns = i64::MIN` and only a `t_ns` receipt on the `session` domain with meaning `app_dequeue`. Delete the `host_receipt` sentence and remove `win_qpc`/hidraw from the `app_dequeue` source examples. Change the example to `kind: \"browser_perf\", coi: false, meaning: ...`. Rename the E0 output field to `offset_uncertainty_ns` (plus `resolution_ns`, `drift_ppm`)."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a77 example header \u2014 source 0 `\"units\": \"css_px\", \"value_scale\": 1024, \"processing\": [..., \"fractional\"]` and clock domain 1 `\"resolution_ns\": 100000, \"offset_to_session_ns\": 0`",
+    "severity": "medium",
+    "issue": "The normative example records the browser source on a Linux X11 / Chromium 156 / browser_locked session in a way that contradicts WEB_PLATFORM_RESEARCH. WEB \u00a72.3 says Chrome's adjusted movementX on Linux is DIP and an integer (truncated), so the unit is `dip`, `value_scale` 1, and there is no `fractional` flag. WEB \u00a72.4 says Chrome's event timestamp on X11 is X-server time in ms, so the effective resolution is 1 ms and the meaning is OS dispatch, not 100 \u00b5s. Separately, `t_ns` is 'zero at session start' while DOM timestamps are relative to timeOrigin, so `offset_to_session_ns` should be \u2212(performance.now() at session start), not 0. This is the only worked example of browser provenance, and it mislabels exactly what the brief says must never be mislabelled.",
+    "fix": "Change source 0 to `\"units\": \"dip\", \"value_scale\": 1`, processing `[\"os_accel_state_unknown\", \"coalesced\"]`. Give domain 1 `resolution_ns: 1000000` with a meaning of `os_dispatch` (X server ms) and a non-zero `offset_to_session_ns` equal to minus the session-start `performance.now()`. Alternatively switch the example to Firefox/Safari, where fractional CSS-px values do apply."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md",
+    "location": "\u00a76.1 `clock_sync` \u2014 \"`t_ns i64, domain u16, _pad u16, _pad u32, src_ts_ns i64, uncertainty_ns i64` (40 B)\"",
+    "severity": "medium",
+    "issue": "The size arithmetic is wrong: 8 + 2 + 2 + 4 + 8 + 8 = 32 bytes, not 40. Every other fixed record adds up (input_motion 32, input_button 24, frame 56, sim_camera 40, sim_target 72, sim_shot 48). A stdlib Python reader written from this table would mis-stride clock_sync records.",
+    "fix": "Change the size to 32 B. If a bracketing receipt time was intended (t_before / t_after around the source read, which is usual for offset estimation), add the missing `i64` field explicitly and keep 40 B."
+   },
+   {
+    "doc": "ARCHITECTURE.md + ROADMAP.md",
+    "location": "ARCH \u00a72 `kf-telemetry` row \"replay driver\" (Depends on: `kf-core`, ...) vs ROADMAP M5 \"Simulation core (`kf-sim`) ... replay driver\"",
+    "severity": "medium",
+    "issue": "The replay driver is assigned to two different crates. Replay feeds recorded input into the simulation, so it needs both the KFLOG reader and kf-sim. The ARCH table gives kf-telemetry no dependency on kf-sim and kf-sim none on kf-telemetry, so wherever the driver goes, a dependency edge is missing from the table that defines the layering.",
+    "fix": "Put the replay driver in kf-sim as a consumer of `impl Iterator<Item = kf_core::InputEvent>`, and have kf-telemetry's reader produce that iterator, so no new edge is needed. Remove 'replay driver' from the kf-telemetry row. (Alternatively host it in kf-cli/kf-trainer, which already link both.)"
+   },
+   {
+    "doc": "AIMLABS_RESEARCH.md + ARCHITECTURE.md + TECH_STACK_RESEARCH.md",
+    "location": "AIMLABS \u00a78 \"scoring framework (in `kf-sim` ...)\" with metric library incl. Fitts throughput, submovements, \"spectral arc length\"; ARCH \u00a72 kf-analytics row; TECH \u00a75.1 \"official scores | yes\" and rustfft \"never in scored paths\"",
+    "severity": "medium",
+    "issue": "AIMLABS places score models in kf-sim, built as compositions of a metric library that includes Fitts throughput, submovement count, smoothness (normalised jerk, spectral arc length) and velocity-threshold reaction time. ARCH puts those metrics in kf-analytics, which kf-sim does not depend on, and DATA_SPEC \u00a78 / ROADMAP M9 give them declared float tolerances. TECH \u00a75.1 requires official scores to be bit-exact, and \u00a75 bans FFT-based kernels from scored paths. As written, a scenario's score can depend on tolerance-based, FFT-based analytics, and the crate graph has no path for it.",
+    "fix": "Split the metrics into two tiers. kf-sim scoring may use only bit-exact primitives from sim events: hits, kills, accuracy, time-to-hit, angular error. Trajectory metrics (Fitts, submovements, smoothness, velocity-threshold RT) stay in kf-analytics as derived, non-scoring outputs. Say this in AIMLABS \u00a78 and ARCH \u00a72, and remove spectral arc length from anything a score model may reference."
+   },
+   {
+    "doc": "ARCHITECTURE.md + PERFORMANCE_PLAN.md",
+    "location": "ARCH \u00a72 `kf-store` \"browser OPFS (worker) / IndexedDB fallback\"; PERFORMANCE_PLAN W6 \"stream to OPFS/IndexedDB\", \u00a74.6 \"OPFS/IndexedDB writer in a worker\"",
+    "severity": "medium",
+    "issue": "STACK_DECISION \u00a71 explicitly rejects 'IndexedDB as the log store', and WEB_PLATFORM_RESEARCH \u00a75 limits IndexedDB to 'small settings/index records (if at all)'. ARCHITECTURE and two PERFORMANCE targets still treat IndexedDB as a log sink. None of the docs says what happens when an OPFS sync handle is unavailable.",
+    "fix": "Remove IndexedDB from the kf-store responsibility and from W6/\u00a74.6. State the behaviour without `FileSystemSyncAccessHandle`: refuse to record, or record into a bounded in-memory buffer with a forced export and a visible warning. If an IndexedDB fallback is actually wanted, move it out of STACK_DECISION's 'rejected' column and specify it."
+   },
+   {
+    "doc": "PERFORMANCE_PLAN.md",
+    "location": "\u00a75 Benchmark matrix \u2014 row \"WebGPU\", columns \"W1 Chromium \u2713\", \"W1 Firefox \u2713 (where shipped for the OS)\"",
+    "severity": "medium",
+    "issue": "W(n) is a browser on class n, and H1 is Linux Mint X11 + NVIDIA. WEB_PLATFORM_RESEARCH \u00a71.1 says Firefox has no WebGPU on Linux (Nightly only), and Chrome on Linux enables it only for Intel Gen12+ or NVIDIA on Wayland. The local check found `requestAdapter()` returns null on this X11 machine, and the DATA_SPEC \u00a77 example shows a WebGL2 fallback. Both 'must measure before 1.0' cells are unmeasurable on H1 as defined.",
+    "fix": "Mark the W1 Firefox WebGPU cell '\u2014' (not shipped on Linux). Qualify W1 Chromium WebGPU as 'H1 Wayland session (NVIDIA \u2265535.183.01)'. Add a 'Web @ H1 Windows' column (Chrome and Firefox both ship WebGPU there) as \u25cb until the dual-boot status is known."
+   },
+   {
+    "doc": "ROADMAP.md + ARCHITECTURE.md",
+    "location": "ROADMAP M1 Acceptance \"a deliberate `std::fs` use in `kf-core` fails the wasm check\"; ARCH \u00a72.1 \"CI runs `cargo check --target wasm32-unknown-unknown`\"",
+    "severity": "medium",
+    "issue": "`std::fs` (also `std::net`, `std::process`, `std::time::Instant::now`) compiles on wasm32-unknown-unknown; it fails or panics only at runtime. So `cargo check` cannot enforce ARCH \u00a72.1's 'no OS/browser dependencies in layers 0\u20131', and the M1 acceptance criterion as written can never be met.",
+    "fix": "Enforce the rule with clippy `disallowed_types` / `disallowed_methods` for `std::fs`, `std::net`, `std::process`, `std::thread::spawn` and `std::time::Instant` in layer 0\u20131 crates (the same mechanism M1 already uses for `f64::sin`), or make those crates `#![no_std]` + `alloc`. Reword the M1 criterion to 'fails clippy'."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md + PERFORMANCE_PLAN.md",
+    "location": "DATA_SPEC \u00a76.5 \"Worst case native: 8000 motion records/s \u00d7 32 B = 256 KB/s\"; PERFORMANCE_PLAN N8 \"8 000 input events/s + 1 000 frame records/s\"",
+    "severity": "low",
+    "issue": "The arithmetic is right for one source, but ARCH \u00a73 deliberately runs several backends at once for contamination checks (e.g. hidraw + evdev + XI2 raw at 8 kHz = 24 000 records/s \u2248 768 KB/s \u2248 2.8 GB/h). It also omits sim_camera (up to 1 000 \u00d7 40 B/s) and sim_target records. The worst case and the N8 throughput target are therefore understated by about 3\u00d7.",
+    "fix": "State the rate per active source in \u00a76.5 and size N8 for the research configuration: \u22653 sources \u00d7 8 000 events/s + 1 000 frames/s + 1 000 sim_camera/s, with zero drops."
+   },
+   {
+    "doc": "STACK_DECISION.md",
+    "location": "\u00a74 Principle \"winit is used for windows, focus and cursor grab only. Every measurement stream comes from a KineForge capture backend\" vs Linux Wayland row \"otherwise winit's relative-pointer motion with receipt timestamps \u2192 `os_unaccelerated`\"",
+    "severity": "low",
+    "issue": "The Wayland fallback makes winit a measurement source, which the stated principle forbids. ARCH \u00a72/\u00a73 lists no winit-backed backend in kf-input, so the fallback has no home and no `Source` variant. winit also drops `utime` and device identity (TECH \u00a73.1).",
+    "fix": "Either add an explicit `WinitWaylandRelative` source to kf-input (labelled `os_unaccelerated`, receipt-only timestamps, `device` unknown) and amend the \u00a74 principle to allow it as a labelled fallback, or drop the fallback and require evdev / Xwayland raw when R6 (the Wayland second-queue experiment) fails."
+   },
+   {
+    "doc": "PERFORMANCE_PLAN.md + ARCHITECTURE.md + STACK_DECISION.md",
+    "location": "PERFORMANCE N4 \"capture \u2192 ring buffer \u2192 sim consumption\"; \u00a74.1 \"Tracy or puffin \u2014 choice in STACK_DECISION.md\"; \u00a74.3 \"criterion/divan\"; ARCH \u00a72 kf-telemetry deps \"chosen columnar/record format\"; STACK \u00a72.1 \"to be measured (PERFORMANCE_PLAN N3)\"",
+    "severity": "low",
+    "issue": "Several statements predate the stack decision. The queue is a bounded `sync_channel` (ARCH \u00a73); an SPSC ring is only a contingency that N4 itself decides. STACK chose Tracy (not puffin) and criterion + gungraun (not divan). kf-telemetry's dependencies are now KFLOG (std + `crc32fast`). STACK \u00a72.1 and TECH \u00a72.3 say the custom-renderer vs Bevy speed question is 'to be measured (N3)', but N3 only checks \u22651000 fps for the thin renderer and includes no Bevy baseline.",
+    "fix": "Reword N4 to 'capture \u2192 bounded channel \u2192 sim'. Update \u00a74.1/\u00a74.3 to Tracy and criterion + gungraun. Set the kf-telemetry dependencies to `kf-core`, `crc32fast`, `serde_json`, plus `parquet` behind a feature. Either add a Bevy baseline scene to N3 or change the STACK/TECH wording to 'N3 checks the thin renderer meets the budget; no engine comparison is planned because the decision does not rest on speed'."
+   }
+  ]
+ },
+ {
+  "findings": [
+   {
+    "doc": "ARCHITECTURE.md (\u00a75 frame loop, \u00a74 'Fixed-step logic clock') + DATA_SPECIFICATION.md \u00a79",
+    "location": "\"drain input \u2192 step sim to now \u2192 record \u2026\" / \"the simulation consumes them in fixed ticks exactly as live\"",
+    "severity": "high",
+    "issue": "Live and replay apply events at different ticks. Native capture threads stamp t_rx (for example QPC at the GetRawInputBuffer drain) before they push to the queue. The main loop drains the queue and then steps the sim to a later 'now'. An event stamped before 'now' but pushed after the drain is applied live at a later tick than its t_ns. Replay sorts by t_ns and applies it at the earlier tick. Example: the Raw Input thread stamps a click at 1000.4 ms and pushes it at 1000.6 ms. The main thread drained at 1000.5 ms and stepped through tick 1001, where the target despawns. Live scores a miss; replay applies the click before tick 1001 and scores a hit. sim_* hashes diverge on ordinary sessions, so E2/E10 and the M7/M8 'replays bit-identically' acceptance fail. Also, per-kind record streams are written in drain order, not t_ns order. A t_ns re-sort in replay therefore needs the whole log in memory, which conflicts with W6 and 'never held whole in wasm memory'.",
+    "fix": "Make replay reproduce what live actually consumed instead of re-sorting by t_ns. Step the sim only up to the drain instant and record it as frame.t_input_cutoff_ns. Record what each drain consumed: either a small `drain` record {frame, source, last_seq} or last-seq-per-source fields in `frame`. Replay applies each drain's events, in seq order, at the tick live used. A late event lands on the next tick in both live and replay. Hit tests can still evaluate target state at the event's t_ns. This also removes the need for a global sort."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md \u00a75 'Writing', \u00a76.2, \u00a79; ARCHITECTURE.md \u00a73\u20134",
+    "location": "\"total order is restored by `(t_ns, kind priority, seq)`\" vs ARCHITECTURE \"`(t_ns, source priority, seq)`\"",
+    "severity": "high",
+    "issue": "The ordering key is undefined and reorders events wrongly. (a) 'Kind priority' is never defined, and ARCHITECTURE uses 'source priority' instead. (b) Every packet in one GetRawInputBuffer drain shares t_ns (one QPC stamp per drain), so sorting by kind before seq moves all buttons in a batch before or after all motion. Example: the batch [move+12, down, move+30, up] becomes [move, move, down, up], and the shot is evaluated with the camera 30 counts too far. (c) If seq is counted per kind, there is no order between kinds within a source at equal t_ns. If one counter is shared across kinds, each kind's seq has gaps that the validator reports as loss. (d) The key has no source field, so two simultaneous sources (contamination mode) tie. Nothing names the source that drives the camera, so replay that 're-emits input records' integrates motion twice when hidraw L1 runs beside evdev or Raw Input. (e) sim_*, frame and annotation records have no t_ns or seq, so 'total order' is undefined for them. Smaller issues: seq is u64 in kf-core but u32 in the log, and batch_ix is u8, which overflows when a stalled drain returns more than 255 packets (32 ms at 8 kHz).",
+    "fix": "Use one seq counter per source, shared by motion, button and wheel. Define the canonical key as (t_ns, source_rank, seq), with seq authoritative inside a source; kind never overrides it. When one RAWMOUSE packet carries both motion and a button, emit the motion first. Add a header field `sim_input_source` so exactly one source drives the sim and all others are record-only. Define t_sim_ns = tick\u00d71e9/sim_hz as the ordering time for sim/frame records. Use the same seq width in kf-core and the log. Widen batch_ix to u16 or drop it, since seq already orders the batch."
+   },
+   {
+    "doc": "ARCHITECTURE.md \u00a74; DATA_SPECIFICATION.md \u00a72.2, \u00a77",
+    "location": "\"Orientation is recomputed from totals every tick\" / single `sensitivity` block in the header / `settings_changed` annotation",
+    "severity": "high",
+    "issue": "Orientation = total_counts \u00d7 rad_per_count \u00d7 current sens. Any mid-session change to sens_x/y or invert_y therefore rescales the whole history and the camera jumps. Example: after 50,000 net yaw counts at 0.000384 rad/count, changing sens from 1.0 to 1.2 turns the camera by 0.2 \u00d7 19.2 rad \u2248 220\u00b0 in one tick. The pitch clamp limit is in counts, so it moves too and the clamped pitch_counts maps to a different angle. The header has one sensitivity block, so the log cannot say which value applied when. Mid-session changes are not hypothetical: EXPERIMENT_PLAN runs counterbalanced A/B sensitivity blocks, and the spec defines a `settings_changed` annotation.",
+    "fix": "Choose one of two approaches. (1) Make sensitivity, gain and invert immutable per session: each block is a new session, and the UI refuses changes mid-session. (2) Add a `sim_params` record (tick plus the new parameters) and rebase at each change: store base_rad = the current angle and reset counts-since-rebase to 0, so orientation = base_rad + counts_since \u00d7 k. Record the rebase so the validator's 'yaw_rad equals recomputation' still holds."
+   },
+   {
+    "doc": "ARCHITECTURE.md \u00a73 'Threading'; ROADMAP.md M6a",
+    "location": "\"bounded `std::sync::mpsc::sync_channel`\", `run(\u2026, tx: SyncSender<InputEvent>, \u2026)`, \"loss is reported as Gap, never silent\"",
+    "severity": "high",
+    "issue": "Back-pressure from the main thread reaches the OS input queue. The main thread can stall for many reasons: pipeline creation at scenario load, surface reconfigure on resize, Fifo present blocking, the Windows modal move/size loop, or Parquet derivation at session close. While it stalls, the bounded channel fills, the capture thread blocks in send() and stops calling GetRawInputBuffer or read(). evdev then overflows in about 5 ms (SYN_DROPPED). Windows Raw Input has no overflow indication at all. seq is assigned by the backend after receipt, so OS-side drops leave no seq gap: the loss is silent. Recording stops as well, because the telemetry writer is fed from the main-loop drain. Loss attribution is also impossible with several sources: `Gap{seq, reason, t_rx}` has no source or device, and the annotation layout (t_ns, code, len, utf8) has no source or seq range. The validator rule 'a seq gap without a matching annotation is a capture bug' therefore cannot be implemented.",
+    "fix": "Capture threads must never block. Use try_send into a preallocated ring sized for the worst expected stall (for example 8 kHz \u00d7 1 s). When it is full, count the drops and emit Gap{source, first_seq, lost} once space frees. Tee records to the telemetry writer directly from the capture side (or a recorder thread), so recording does not depend on the render loop. Add `source u16, seq u32, lost u32` to the annotation layout and a source/device field to Gap. State plainly that OS-side loss on Raw Input and in browsers is invisible to seq and can only be checked with \u03a3counts against an L1 source."
+   },
+   {
+    "doc": "ARCHITECTURE.md \u00a74; DATA_SPECIFICATION.md \u00a72.2, \u00a76.2, \u00a77; EXPERIMENT_PLAN.md E2",
+    "location": "\"after directional gain (which itself outputs integer counts)\"; \"\u03c8 = yaw_counts \u00d7 yaw_rad_per_count \u00d7 sens_x\"; \"independent of frame rate and event batching\"",
+    "severity": "high",
+    "issue": "The count arithmetic is applied to units that are not counts. (a) The header example declares a browser source with value_scale 1024, but the camera formula never divides by value_scale, so the camera turns 1024\u00d7 too fast. (b) kf-dirgain fed with \u00d71024 (browser) or \u00d7256 (wl_fixed) values: the direction estimator is bounded at |d| \u2264 16383 (Q8 counts), so its window collapses immediately (ODD audit \u00a76.1). The \u00b132767 per-report output clamp then equals 32 CSS px per event, and Safari's frame-coalesced events reach that at slow motion speeds. The result is clamped or carried motion and a meaningless profile. (c) ODD's idle reset uses a per-report now_ms, but Raw Input and receipt t_ns give one stamp per drain. Batching therefore stretches or compresses idle gaps, and the result is not a faithful firmware simulation. (d) Gain and the count-space pitch clamp depend on the path taken. Example: at 950 of a 1000-count limit, +100 then \u221250 ends at 950, but the summed +50 ends at 1000. E2's 'batched per frame vs per event \u2026 identical' assertion therefore fails whenever gain or clamping is active.",
+    "fix": "Define the camera angle as (value / value_scale) \u00d7 rad_per_unit. Dividing by 256 or 1024 is exact, so determinism is kept. Allow kf-dirgain only on sources with units=counts and value_scale=1; otherwise refuse, or require an explicit rescale with its own label. Specify the gain's time input: src_ts where it is per-report, otherwise receipt time plus an 'approximate gain timing' flag. State that gain and clamping are applied per recorded event in canonical order. Limit E2's batching variation to delivery batching, not summed deltas, when gain or clamping is enabled."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md \u00a77, \u00a76.4; STACK_DECISION.md \u00a77",
+    "location": "header floats such as \"yaw_rad_per_count\": 0.0003839724354387525; \"must equal the recomputation bit-for-bit\"; serde_json \"1\"",
+    "severity": "medium",
+    "issue": "Bit-exactness depends on parsing JSON floats exactly, and the default serde_json does not guarantee it. Without the `float_roundtrip` feature, serde_json parses with a 'best-effort' algorithm that is not guaranteed to round correctly for 16\u201317-digit values. Replay reads rad_per_count and sens from the header JSON and can get an f64 one ulp away from the value used live. Every yaw_rad then differs, the validator's recomputation check fails, E10 hashes mismatch, and the Rust reader disagrees with the Python reader (which rounds correctly). The inline scenario config floats (target speeds, radii) have the same problem.",
+    "fix": "Enable serde_json's `float_roundtrip` feature workspace-wide, and add a test that round-trips random f64 values through serde_json. Alternatively, store sim-critical floats as exact bit patterns next to the decimal (for example \"yaw_rad_per_count_bits\": \"0x\u2026\") and have the sim read only the bits."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md \u00a71 principle 3, \u00a76.1, \u00a711; ARCHITECTURE.md \u00a73",
+    "location": "sources are declared only in the header; \"data from different input levels is never merged into one source\"; `InputEvent::Device(DeviceInfo)`",
+    "severity": "medium",
+    "issue": "There is no record kind for declaring a source or device after the header. Browser example: the lock is acquired with unadjustedMovement. The user presses Esc, and the re-lock (after Chrome's 1250 ms cooldown) is rejected for unadjusted and falls back to a normal lock. Motion is now browser_locked, but it can only be written under the old source id, mislabelled as L4u, or under an undeclared id, which fails 'every record's source declared'. The same happens with a hot-plugged mouse (DeviceInfo has no record kind) or with Input Monitoring granted mid-session. The header also contains values that are only known after the session starts (refresh_hz_measured, unadjusted_movement).",
+    "fix": "Add `source_declare` and `device_info` JSON record kinds that may appear anywhere before a source or device is first used. Open a new source id on every pointer-lock acquisition, carrying its resolved level. The validator checks that each declaration precedes first use. The header keeps only facts known at start; measured values go into records or session_end."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md \u00a71, \u00a75 'Writing'/'Recovery'; ROADMAP.md M4",
+    "location": "\"Records of different kinds go into separate in-memory chunks \u2026 4096 records or 100 ms\"; \"truncate there; append a session_end chunk\"",
+    "severity": "medium",
+    "issue": "(a) Each kind's buffer flushes on its own timer or count, so the durable prefix after a crash is inconsistent across kinds. For example, sim_shot and sim_camera may be on disk through time T while input_motion stops at T\u2212100 ms. A recovered session then contains sim_* records that cannot be reproduced from its own input, so the replay hash check fails on every crashed session, and recovery derives shots whose inputs are missing. (b) 'Truncate there' rewrites a raw log that \u00a71 says is never rewritten. It also discards valid chunks that follow a mid-file bad chunk, such as a zero-filled block after a power loss with delayed allocation. (c) Native files have no lock (OPFS does), so a second trainer instance or kf-cli recovery can truncate a session that is still being written.",
+    "fix": "Flush all kind buffers together as a group, and follow each group with a small `commit` chunk that carries the watermark (t_ns, tick, per-source last seq). Recovery cuts at the last commit and labels anything after it as uncommitted. Never truncate in place: write the recovered end into a copy or sidecar and keep the original bytes. Hold an exclusive lock (flock/LockFileEx) on raw.kflog while writing, and treat a held lock as 'live, do not recover'."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md \u00a75 'Chunk', \u00a76.1",
+    "location": "\"CRC-32 \u2026 over `kind` \u2026 end of `payload`\"; clock_sync \"(40 B)\"",
+    "severity": "medium",
+    "issue": "(a) The CRC does not cover payload_len. A corrupted length makes the reader seek or allocate up to 4 GiB before any check can run, and the wasm validator aborts with OOM instead of reporting truncation. (b) Nothing requires payload_len == record_count \u00d7 record_size(kind, kind_version). (c) The clock_sync fields add up to 32 B (8+2+2+4+8+8), but the spec says 40 B, so a reader using the stated size misparses every following record. (d) The 16 B file header plus 12 B chunk header puts the first payload at offset 28, and later payloads land at arbitrary offsets. This defeats the 8-byte alignment that the `_pad` fields are meant to provide.",
+    "fix": "Compute the CRC over payload_len through the end of the payload, or add a separate header CRC. Enforce a maximum chunk size (for example 1 MiB, including JSON chunks) before allocating. Check payload_len against the record size for fixed-layout kinds. Correct clock_sync to 32 B. Use a 16 B chunk header (add a u32 reserved field) and pad payloads to a multiple of 8."
+   },
+   {
+    "doc": "PERFORMANCE_PLAN.md N9, \u00a74.6, W8; DATA_SPECIFICATION.md \u00a75; ARCHITECTURE.md \u00a76",
+    "location": "N9 \"flush interval (default 250 ms) \u2026 SIGKILL/power-loss\" vs \"100 ms\" chunks and \"fdatasync at most every 1 s\"; W8 \"within one frame of `visibilitychange: hidden`\"",
+    "severity": "medium",
+    "issue": "The docs give three different durability numbers. SIGKILL loses only the unflushed buffers (up to about 100 ms). Power loss can lose up to the fdatasync interval plus one buffer (up to about 1.1 s). N9's 250 ms bound therefore cannot hold for power loss, and \u00a74.6 has no procedure for simulating power loss. In the browser, hidden tabs get no rAF and timers throttled to at least 1 s (1/min under intensive throttling). Pending chunks, including the gap annotation itself, stay in wasm memory and are lost if the tab is discarded or closed. W8's 'within one frame' is undefined when no frames run.",
+    "fix": "Use two named settings: chunk_flush_ms (100) and fsync_ms. Split N9 into N9a, process kill \u2264 chunk_flush_ms, tested with SIGKILL, and N9b, power loss \u2264 fsync_ms + chunk_flush_ms, tested with a VM hard reset or dm-log-writes replay. In visibilitychange:hidden and pagehide handlers, encode and post all pending chunks synchronously and ask the worker to flush(). Restate W8 as 'gap annotation durable in OPFS \u2264 50 ms after the event's timeStamp', verified by reading OPFS back."
+   },
+   {
+    "doc": "PERFORMANCE_PLAN.md N5, N4, N2, \u00a76; ROADMAP.md M7",
+    "location": "N5 \"**0** per frame after warm-up (excluding driver)\"; N4 \"median \u2264 2 \u00b5s/event\" enforced by \"instruction counts\"; N2 \"p99 frame interval \u2264 1.10 \u00d7 refresh period\"",
+    "severity": "medium",
+    "issue": "Several targets cannot be met or tested as written. N5: egui allocates every frame (Context::run returns a new Vec<ClippedShape>, and tessellate returns a new Vec<ClippedPrimitive>), and wgpu-core allocates for command encoders, render passes and per-submit tracking. Neither is 'driver'. With the egui HUD drawn every frame in the same pass, N5 and the M7 acceptance fail from the start. N4 is a wall-time target spanning a thread handoff, but \u00a76 enforces it with callgrind instruction counts, and callgrind serialises threads. N2 is meaningless for the Mailbox/Immediate rows of the matrix, and STACK_DECISION \u00a75.1 says present time is not available to measure it.",
+    "fix": "Scope N5 to input drain + sim step + telemetry encode, tested as a headless loop with the counting allocator. Track renderer/UI allocations per frame as a metric with a ceiling instead of a zero target. Split N4 into CPU cost per event (single-threaded bench plus instruction counts) and handoff latency (measured on hardware). Define N2 for Fifo only, as the CPU frame-start interval, and cross-check with the photodiode rig or PresentMon."
+   },
+   {
+    "doc": "STACK_DECISION.md \u00a74 (Windows row); ARCHITECTURE.md \u00a73; PERFORMANCE_PLAN.md \u00a75",
+    "location": "\"Raw Input on a dedicated thread \u2026 owns the process-wide registration\"; \"8 kHz mice otherwise cripple the message loop\"; all 4\u20138 kHz cells \"\u25cb\"",
+    "severity": "medium",
+    "issue": "Moving WM_INPUT to a capture thread does not stop the high-poll flood on winit's thread. Without RIDEV_NOLEGACY, legacy WM_MOUSEMOVE and the hit-testing it triggers still reach winit's thread at the poll rate (winit PR #3609 is open; Bevy #12679 saw max frame time go from 10 to 80 ms at \u22654 kHz). research/notes/input.md recommends NOLEGACY during locked trials, but the decision leaves it out. Every 4\u20138 kHz cell in the benchmark matrix is '\u25cb', so N1/N2 on the H2 class never have to be measured before 1.0. The planned RP2040/nRF52840 count sources are USB full-speed devices, limited to 1 kHz polling.",
+    "fix": "Add to the Windows decision: the capture thread registers with RIDEV_NOLEGACY only while a trial holds the cursor, and re-registers without it for menus and egui. Make a Windows 8 kHz frame-time and drop test a \u2713 row on H1, using an 8 kHz mouse or a high-speed (480 Mbit) programmable HID device such as a Teensy 4.x."
+   },
+   {
+    "doc": "STACK_DECISION.md \u00a74 (Browser row); DATA_SPECIFICATION.md \u00a76.2; ROADMAP.md M6b",
+    "location": "\"`pointerrawupdate` + `getCoalescedEvents()`\"; flag \"bit 0 coalesced sub-event\"; \"coalesced expansion\"",
+    "severity": "medium",
+    "issue": "Browser motion can be counted twice. In Chrome and Firefox, a dispatched event's movementX is already the sum of its coalesced list, and the coalesced lists of pointerrawupdate events concatenate to the next pointermove's list (_browser.md \u00a76.5). Recording both a parent and its sub-events under one source, or listening to both pointerrawupdate and pointermove, double-integrates motion. Firefox 140\u2013147 also deliver pointerrawupdate with movementX = 0, and Safari has no pointerrawupdate at all.",
+    "fix": "Specify that each session listens to exactly one motion event type: pointerrawupdate where it works, otherwise pointermove. Record only leaf sub-events (the event itself when its list is empty or contains only itself). Add a validator check that \u03a3 sub-events equals the parent movement on sampled events. Feature-detect working pointerrawupdate by comparing it with pointermove during the first second, or set Firefox 148 as the minimum."
+   },
+   {
+    "doc": "ARCHITECTURE.md \u00a73",
+    "location": "`fn run(self: Box<Self>, tx: SyncSender<InputEvent>, stop: Arc<AtomicBool>)`",
+    "severity": "low",
+    "issue": "Backends block in MsgWaitForMultipleObjects/GetMessage, in read() or poll() on evdev/hidraw, in xcb_wait_for_event, or in CFRunLoopRun. They only see the AtomicBool when the next input arrives. With the mouse idle or unplugged, the thread never exits, and join() hangs at session end or app quit.",
+    "fix": "Replace the flag with a backend-provided wake, for example `fn start(self, tx) -> Result<Box<dyn StopHandle>>`. The stop handle can post WM_QUIT or SetEvent on an extra handle in MsgWaitForMultipleObjects, write an eventfd included in the poll set, send an X ClientMessage, or call CFRunLoopStop."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md \u00a72.1, \u00a76.2, \u00a77",
+    "location": "\"declares `kind = \\\"host_receipt\\\"`\" vs `meaning` \"`app_dequeue` (Raw Input QPC at drain\u2026)\" vs \"`i64::MIN` if none \u2014 e.g. Windows Raw Input\"; example `\"kind\": \"dom_event_timestamp\"`, `\"offset_to_session_ns\": 0`, `\"units\": \"css_px\"`",
+    "severity": "low",
+    "issue": "The Raw Input timestamp is described three incompatible ways. The example header would fail its own schema validation: `dom_event_timestamp` and `host_receipt` are not in the kind enum. The offset of 0 is wrong, because event.timeStamp is relative to timeOrigin while session t=0 is later. Chromium's locked movementX is DIP, not CSS px, according to the project's own research. The i64::MIN and u32::MAX sentinels also wrap silently in arithmetic such as t_ns \u2212 src_ts_ns, and X11 and wl_pointer u32 millisecond stamps wrap after 49.7 days.",
+    "fix": "Pick one representation for Raw Input: src_ts_ns = i64::MIN with no clock domain, and t_ns = the QPC receipt at drain. Add `dom_event_timestamp` to the enum (or use `browser_perf`). Set the offset to \u2212session_start. Use `dip` for Chromium. Require the Parquet export and the Python reader to map sentinels to null. Unwrap 32-bit ms stamps to i64."
+   },
+   {
+    "doc": "DATA_SPECIFICATION.md \u00a74, \u00a72.1, \u00a712",
+    "location": "\"`session-id` is a UUIDv7\" vs wall clock \"omitted in privacy exports\"",
+    "severity": "low",
+    "issue": "A UUIDv7 encodes the Unix creation time in milliseconds in its first 48 bits. The session_id appears in the raw-log header and in file names, so a privacy export still reveals the exact session start time.",
+    "fix": "Use UUIDv4, since ordering already comes from t_ns and started_at_utc. Otherwise, document the leak and re-key the session id in privacy exports."
+   }
+  ]
+ }
+]

@@ -1,0 +1,490 @@
+[
+ {
+  "results": [
+   {
+    "id": "B1",
+    "verdict": "partly",
+    "evidence": "Wiki (last commit 6e41fe1, 2026-10-02 by Kai Ninomiya). Chromium table: Mac/Windows (x86/x64)/ChromeOS \u2705113; Android: '\u2705 ARM/Qualcomm/Intel, Android 12+: 121', '\u2705 Imagination, Android 16+: 139', '\ud83d\udc77 Samsung Xclipse, Android 12+: TBD', '\ud83d\udc77 Others: TBD'; Linux: '\u2705 Intel Gen12+: 144', '\u2705 NVIDIA (driver 535.183.01+) Wayland: 147', others behind a flag; Windows ARM64 '\ud83d\udc77 Behind a flag'. BCD api/GPU.json agrees: chrome 144 for Linux Intel Gen12+, 113 partial for ChromeOS/macOS/Windows; chrome_android 121.",
+    "urls": [
+     "https://github.com/gpuweb/gpuweb/wiki/Implementation-Status",
+     "https://github.com/gpuweb/gpuweb.wiki.git",
+     "https://raw.githubusercontent.com/mdn/browser-compat-data/main/api/GPU.json"
+    ],
+    "corrected_statement": "Per the gpuweb Implementation-Status wiki (last edited 2026-10-02): Chrome ships WebGPU on macOS, Windows x86/x64 and ChromeOS since 113. On Android it ships since 121 only for ARM, Qualcomm and Intel GPUs on Android 12+, and since 139 for Imagination GPUs on Android 16+; Samsung Xclipse and other Android GPUs are TBD. On Linux it ships only for Intel Gen12+ (since 144) and NVIDIA on Wayland with driver 535.183.01+ (since 147); other Linux setups need a flag. Windows ARM64 needs a flag."
+   },
+   {
+    "id": "B2",
+    "verdict": "partly",
+    "evidence": "Wiki Firefox table: Windows '\u2705 141'; 'Mac (Apple Silicon)': '\u2705 145 on macOS 26+', '\u2705 147 on all macOS versions'; 'Mac (other)': '\ud83d\udc77 Nightly'; Linux '\ud83d\udc77 Nightly'; Android '\ud83d\udc77 Behind a flag' (disabled by default, gfx.webgpu.ignore-blocklist). BCD notes: 'Does not support macOS on Intel CPUs' (bug 2004105).",
+    "urls": [
+     "https://github.com/gpuweb/gpuweb/wiki/Implementation-Status",
+     "https://raw.githubusercontent.com/mdn/browser-compat-data/main/api/GPU.json"
+    ],
+    "corrected_statement": "Firefox ships WebGPU on Windows since 141. On Apple Silicon Macs it ships since 145 on macOS 26+ and since 147 on all macOS versions. Intel Macs and Linux are Nightly-only. On Android it is disabled by default and can be enabled with a flag (gfx.webgpu.ignore-blocklist) in Beta or Nightly. Firefox stable also lacks WebGPU in service workers."
+   },
+   {
+    "id": "B3",
+    "verdict": "confirmed",
+    "evidence": "Wiki Safari table: macOS \u2705 26, iOS/iPadOS \u2705 26, visionOS \u2705 26; 'supported and enabled by default'. BCD api/GPU.json: safari version_added '26', safari_ios mirror.",
+    "urls": [
+     "https://github.com/gpuweb/gpuweb/wiki/Implementation-Status",
+     "https://raw.githubusercontent.com/mdn/browser-compat-data/main/api/GPU.json"
+    ]
+   },
+   {
+    "id": "B4",
+    "verdict": "confirmed",
+    "evidence": "WebGPU spec index.bs:2466 '[SameObject, SecureContext] readonly attribute GPU gpu;' and :2485 '[Exposed=(Window, Worker), SecureContext] interface GPU'. MDN Navigator.gpu has SecureContext_Header. MDN Secure contexts lists http://localhost as secure.",
+    "urls": [
+     "https://raw.githubusercontent.com/gpuweb/gpuweb/main/spec/index.bs",
+     "https://gpuweb.github.io/gpuweb/#navigator-gpu",
+     "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu",
+     "https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts"
+    ],
+    "corrected_statement": "navigator.gpu and the GPU interface are SecureContext-only, in both Window and Worker. Secure contexts include HTTPS and potentially trustworthy origins such as http://localhost, *.localhost and 127.0.0.1."
+   }
+  ]
+ },
+ {
+  "results": [
+   {
+    "id": "N1",
+    "verdict": "confirmed",
+    "evidence": "crates.io API lists 0.30.13 created 2026-03-02T13:50Z, 0.31.0-beta.4 created 2026-10-24T07:19Z, and license Apache-2.0 for every version. GitHub releases/latest is v0.30.13. The repo license spdx_id is Apache-2.0. The master workspace Cargo.toml:11 has version = \"0.31.0-beta.4\".",
+    "urls": [
+     "https://crates.io/api/v1/crates/winit/versions",
+     "https://api.github.com/repos/rust-windowing/winit/releases/latest",
+     "https://github.com/rust-windowing/winit/blob/master/Cargo.toml"
+    ]
+   },
+   {
+    "id": "N2",
+    "verdict": "confirmed",
+    "evidence": "Issue #1194 \"Input event timestamps\" (opened 2019-09-30) is still open. In v0.30.13 src/event.rs and master winit-core/src/event.rs, the only Instant fields are in StartCause (ResumeTimeReached/WaitCancelled). No input event has a timestamp.",
+    "urls": [
+     "https://github.com/rust-windowing/winit/issues/1194",
+     "https://github.com/rust-windowing/winit/blob/v0.30.13/src/event.rs",
+     "https://github.com/rust-windowing/winit/blob/master/winit-core/src/event.rs"
+    ]
+   },
+   {
+    "id": "N3",
+    "verdict": "confirmed",
+    "evidence": "v0.30.13 src/platform_impl/macos/app.rs:111-125 builds MouseMotion from event.deltaX()/deltaY(). #4581 (open, 2026-05-29) asks for GCMouse but only says the deltas 'may be affected' by acceleration. The merged SDL PR #14741 measured NSEvent deltas being multiplied by acceleration. This also contradicts the 0.30.13 doc that MouseMotion is 'raw, unfiltered physical motion'.",
+    "urls": [
+     "https://github.com/rust-windowing/winit/blob/v0.30.13/src/platform_impl/macos/app.rs",
+     "https://github.com/rust-windowing/winit/issues/4581",
+     "https://github.com/libsdl-org/SDL/pull/14741"
+    ]
+   },
+   {
+    "id": "N4",
+    "verdict": "confirmed",
+    "evidence": "v0.30.13 x11/window.rs:1494-1497: 'We don't support the locked cursor yet', so Locked returns NotSupported. macos/window_delegate.rs:1127-1129 and web/window.rs:234-236 return NotSupported for Confined.",
+    "urls": [
+     "https://github.com/rust-windowing/winit/blob/v0.30.13/src/platform_impl/linux/x11/window.rs",
+     "https://github.com/rust-windowing/winit/blob/v0.30.13/src/platform_impl/macos/window_delegate.rs",
+     "https://github.com/rust-windowing/winit/blob/v0.30.13/src/platform_impl/web/window.rs"
+    ]
+   },
+   {
+    "id": "N5",
+    "verdict": "confirmed",
+    "evidence": "v0.30.13 wayland/seat/pointer/relative_pointer.rs:63-77 matches RelativeMotion { dx_unaccel, dy_unaccel, .. }, so utime_hi/utime_lo (and the accelerated dx/dy) are discarded. MouseMotion { delta: (dx_unaccel, dy_unaccel) } is then pushed.",
+    "urls": [
+     "https://github.com/rust-windowing/winit/blob/v0.30.13/src/platform_impl/linux/wayland/seat/pointer/relative_pointer.rs"
+    ]
+   },
+   {
+    "id": "N6",
+    "verdict": "confirmed",
+    "evidence": "master (f0abec9, workspace 0.31.0-beta.4) winit-web/src/lock.rs: is_cursor_lock_raw returns false when chrome_linux(navigator), citing issues.chromium.org/issues/40833850. Otherwise it calls requestPointerLock with unadjustedMovement=true.",
+    "urls": [
+     "https://github.com/rust-windowing/winit/blob/master/winit-web/src/lock.rs",
+     "https://issues.chromium.org/issues/40833850"
+    ]
+   },
+   {
+    "id": "N7",
+    "verdict": "confirmed",
+    "evidence": "static.rust-lang.org channel-rust-stable.toml has date = \"2026-11-12\" and [pkg.rust] version 1.100.0 (0ef1bc386 2026-11-09). The GitHub release 1.100.0 was published 2026-11-12T18:19Z.",
+    "urls": [
+     "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+     "https://github.com/rust-lang/rust/releases/tag/1.100.0"
+    ]
+   }
+  ]
+ },
+ {
+  "results": [
+   {
+    "id": "W1",
+    "verdict": "confirmed",
+    "evidence": "crates.io API: max_stable_version 30.0.2, created_at 2026-11-12T18:39Z, license 'MIT OR Apache-2.0', rust_version 1.87.0. GitHub release v30.0.2 published 2026-11-12. wgpu/Cargo.toml:18 rust-version = \"1.87.0\". Note: the workspace Cargo.toml:71 sets rust-version 1.93, which applies to the other workspace crates, not the wgpu crate.",
+    "urls": [
+     "https://crates.io/api/v1/crates/wgpu",
+     "https://github.com/gfx-rs/wgpu/releases/tag/v30.0.2",
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu/Cargo.toml"
+    ]
+   },
+   {
+    "id": "W2",
+    "verdict": "confirmed",
+    "evidence": "wgpu/src/backend/webgpu.rs:4175 sets present_modes: vec![wgt::PresentMode::Fifo]. Lines 4226-4227: Mailbox or Immediate leads to panic!(\"Only FIFO/Auto* is supported on web\").",
+    "urls": [
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu/src/backend/webgpu.rs#L4175",
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu/src/backend/webgpu.rs#L4226"
+    ]
+   },
+   {
+    "id": "W3",
+    "verdict": "confirmed",
+    "evidence": "wgpu/src/util/init.rs defines pub async fn new_instance_with_webgpu_detection(InstanceDescriptor). It removes BROWSER_WEBGPU when is_browser_webgpu_supported() is false. Its doc says to prefer it 'if you want to target WebGPU and automatically fall back to WebGL'. wgpu/Cargo.toml defines both the webgpu (line 64) and webgl (line 87) features.",
+    "urls": [
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu/src/util/init.rs",
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu/Cargo.toml"
+    ]
+   },
+   {
+    "id": "W4",
+    "verdict": "confirmed",
+    "evidence": "wgpu-types/src/surface.rs:953-959, in the desired_maximum_frame_latency docs, lists the backend mappings and includes '- OpenGL: Ignored'. The GLES adapter also hard-codes maximum_frame_latency: 2..=2 with the comment 'TODO, unused currently' (wgpu-hal/src/gles/adapter.rs:1377).",
+    "urls": [
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-types/src/surface.rs#L953-L959",
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-hal/src/gles/adapter.rs#L1377"
+    ]
+   },
+   {
+    "id": "W5",
+    "verdict": "confirmed",
+    "evidence": "wgpu-hal/src/gles/adapter.rs:1371-1375 reads present_modes: if cfg!(windows) { vec![Fifo, Immediate] } else { vec![Fifo] //TODO }.",
+    "urls": [
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-hal/src/gles/adapter.rs#L1371-L1375"
+    ]
+   },
+   {
+    "id": "W6",
+    "verdict": "confirmed",
+    "evidence": "egui #5889 ('Switch to wgpu as default backend of eframe', now closed) has the heading 'Increased wasm binary size (+2.4 MiB)'. It attributes the growth to naga transpiling WGSL to GLSL for WebGL. Its quick test: build_demo_web.sh --release gives 5.9 MiB, and adding --wgpu gives 8.3 MiB.",
+    "urls": [
+     "https://github.com/emilk/egui/issues/5889"
+    ]
+   },
+   {
+    "id": "W7",
+    "verdict": "confirmed",
+    "evidence": "Both issues are open: #2869 'Extended Presentation API Investigation' (2022) and #9856 'Metal-first frame-specific presentation feedback for SurfaceTexture' (2026-07-12). In v30.0.2, SurfaceTexture has no timing method. Adapter::get_presentation_timestamp only reads the presentation clock for clock correlation and is INVALID on webgpu. Features::VULKAN_GOOGLE_DISPLAY_TIMING says 'does not have a wgpu-level API'; it is as_hal only and just sets the next present time.",
+    "urls": [
+     "https://github.com/gfx-rs/wgpu/issues/2869",
+     "https://github.com/gfx-rs/wgpu/issues/9856",
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu/src/api/adapter.rs#L186-L209",
+     "https://github.com/gfx-rs/wgpu/blob/v30.0.2/wgpu-types/src/features.rs#L1192-L1208"
+    ]
+   }
+  ]
+ },
+ {
+  "results": [
+   {
+    "id": "O1",
+    "verdict": "confirmed",
+    "evidence": "core/directional_dpi.c:501-509 clamps out_int to +/-32767, then sets new_rem = total_q16 - out_int*65536 and stores it via clamp_rem_i32, which caps at +/-2147418112 (lines 472-480), under the comment 'Carry any excess beyond report clamp in remainder instead of dropping it'. ddpi_engine_set_profile (lines 327-336) calls ddpi_engine_reset_remainders, which zeroes rem_x/y and dir_x/y, only when ddpi_profile_is_identity() is true. I copied the .c and .h files to /tmp/claude-1000/-home-lloen-src-kineforge/95815f0b-46c2-4973-91bb-aaae9ed96bbc/scratchpad/verify/odd/harness.c and built them with gcc -std=c11 -Wall -Wextra. Feeding dx=30000 into a 16x profile (4x multipliers, 4x gain) gave out=32767 with rem_x=2147418112, which is exactly 32767 counts. The next two dx=1 calls returned 32767 and then 32, so the remainder was drained. A non-identity set_profile left rem at 2147418112, and setting a disabled (identity) profile reset it to 0. One limit: anything beyond one extra report (32767 counts) is still lost when the remainder saturates. In the run above about 414k of the 480k counts were dropped. 'Identity' also covers disabled and calibration-bypass profiles. An ONLY_AT_BASE_DPI mismatch does not trigger the reset.",
+    "urls": [
+     "file:///home/lloen/src/open-glorious-one-firmware/core/directional_dpi.c",
+     "file:///tmp/claude-1000/-home-lloen-src-kineforge/95815f0b-46c2-4973-91bb-aaae9ed96bbc/scratchpad/verify/odd/harness.c"
+    ]
+   },
+   {
+    "id": "O2",
+    "verdict": "confirmed",
+    "evidence": "calibration/cli.ts:79-80 sets p.reserved = opts.windowCounts ?? Math.min(DDPI_MAX_WINDOW_COUNTS, Math.max(1, Math.round(p.baseDpi / 50.8))), and DDPI_MAX_WINDOW_COUNTS = 128 (integrations/openmouse/src/directional-dpi.ts:42). The Math.max(1, ...) floor never matters, because clampDpi keeps baseDpi >= 50. p.baseDpi is the recommended sensor CPI: the playing DPI, or the raised DPI for cpi-headroom. web/calibrate.html:456-460 runs try { await canvas.requestPointerLock({ unadjustedMovement: true }) } catch { canvas.requestPointerLock(); }. MDN says unadjustedMovement defaults to false and that setting it to true 'will disable mouse acceleration'. So the plain fallback is OS-accelerated. Browsers whose requestPointerLock returns no promise never reach the catch and silently get an accelerated lock.",
+    "urls": [
+     "file:///home/lloen/src/open-glorious-one-firmware/calibration/cli.ts",
+     "file:///home/lloen/src/open-glorious-one-firmware/web/calibrate.html",
+     "https://developer.mozilla.org/en-US/docs/Web/API/Element/requestPointerLock",
+     "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/api/element/requestpointerlock/index.md"
+    ]
+   },
+   {
+    "id": "K1",
+    "verdict": "confirmed",
+    "evidence": "Checked live on 2026-11-14. crates.io returns 404 'crate `kineforge` does not exist'. The npm registry returns 404 and an npm search finds 0 results. PyPI JSON returns 404. The variants kine-forge and kine_forge are also 404 on all three. GitHub returns 404 for users/kineforge and orgs/kineforge. RDAP shows KINEFORGE.COM registered since 2025-03-24, expiring 2027-03-24. It resolves to OVH web hosting, which serves the 'Site not installed' placeholder with HTTP 404 (it also has an MX record). Similar names are taken on GitHub: repos rzfarhad73/kineforge, znzhao/Kineforge, 0dot77/kineforge and wieslawsoltes/KineforgeStudio, and user kineforgeempresa-dev.",
+    "urls": [
+     "https://crates.io/api/v1/crates/kineforge",
+     "https://registry.npmjs.org/kineforge",
+     "https://pypi.org/pypi/kineforge/json",
+     "https://api.github.com/users/kineforge",
+     "https://rdap.verisign.com/com/v1/domain/kineforge.com",
+     "http://kineforge.com/"
+    ]
+   }
+  ]
+ },
+ {
+  "results": [
+   {
+    "id": "E1",
+    "verdict": "confirmed",
+    "evidence": "crates.io: bevy max_stable 0.20.1, published 2026-10-28, rust_version 1.97.1. GH latest release v0.20.1. Bevy Cargo.toml:13 has rust-version = \"1.97.1\". docs/cargo_features.md:213 at v0.20.1 says the webgpu feature \"will override the `webgl2` feature\", and Cargo.toml:660 says the same.",
+    "urls": [
+     "https://crates.io/api/v1/crates/bevy",
+     "https://raw.githubusercontent.com/bevyengine/bevy/v0.20.1/docs/cargo_features.md",
+     "https://raw.githubusercontent.com/bevyengine/bevy/v0.20.1/Cargo.toml",
+     "https://api.github.com/repos/bevyengine/bevy/releases/latest"
+    ]
+   },
+   {
+    "id": "E2",
+    "verdict": "confirmed",
+    "evidence": "crates.io: egui, eframe and egui-wgpu 0.37.0 were published 2026-10-15. egui-wgpu 0.37.0 depends on wgpu ^30.0 and on winit ^0.30.13, which is optional and enabled by eframe. eframe also depends on winit ^0.30.13 directly. eframe's default features include \"wgpu\" (crates/eframe/Cargo.toml). Renderer::default (epi.rs:634-655) returns Wgpu unless only glow is enabled.",
+    "urls": [
+     "https://crates.io/api/v1/crates/egui-wgpu/0.37.0/dependencies",
+     "https://crates.io/api/v1/crates/eframe/0.37.0/dependencies",
+     "https://raw.githubusercontent.com/emilk/egui/0.37.0/crates/eframe/Cargo.toml",
+     "https://raw.githubusercontent.com/emilk/egui/0.37.0/crates/eframe/src/epi.rs"
+    ]
+   },
+   {
+    "id": "E3",
+    "verdict": "confirmed",
+    "evidence": "The AccessKit README lists released adapters for Android, iOS, macOS, Unix (AT-SPI over zbus) and Windows. Under \"Planned adapters\" it lists only web, for canvas-rendered UIs. crates.io has no official accesskit web crate. egui README:276 says web gets \"an experimental built-in screen reader\". eframe/src/web/screen_reader.rs speaks text with web_sys SpeechSynthesis, behind the web_screen_reader feature.",
+    "urls": [
+     "https://raw.githubusercontent.com/AccessKit/accesskit/main/README.md",
+     "https://raw.githubusercontent.com/emilk/egui/0.37.0/README.md",
+     "https://raw.githubusercontent.com/emilk/egui/0.37.0/crates/eframe/src/web/screen_reader.rs"
+    ]
+   },
+   {
+    "id": "E4",
+    "verdict": "confirmed",
+    "corrected_statement": "Minor scope note: the license covers desktop, mobile AND web applications, and excludes embedded systems.",
+    "evidence": "LicenseRef-Slint-Royalty-free-2.0.md \u00a72 allows distribution with an Application only if you display the AboutSlint widget (a) or the attribution badge on a public webpage (b). Its title is \"Desktop, Mobile, and Web Applications\". docs guide/platforms/web.mdx (v1.18.1 and master) says screen readers \"are not available\" and that running in the browser is \"not recommended for building general-purpose web applications\".",
+    "urls": [
+     "https://raw.githubusercontent.com/slint-ui/slint/master/LICENSES/LicenseRef-Slint-Royalty-free-2.0.md",
+     "https://raw.githubusercontent.com/slint-ui/slint/v1.18.1/docs/astro/src/content/docs/guide/platforms/web.mdx",
+     "https://raw.githubusercontent.com/slint-ui/slint/master/docs/astro/src/content/docs/guide/platforms/web.mdx"
+    ]
+   },
+   {
+    "id": "E5",
+    "verdict": "confirmed",
+    "evidence": "SDL release-3.4.20 docs/README-platforms.md:8 lists \"Emscripten (Web browsers)\" as the only web platform. src/video has only an emscripten web backend. SDL issue #6810 (non-Emscripten wasm) was closed as not_planned. wgpu 30.0.2 build.rs defines webgpu as all(not(native), not(Emscripten), feature=\"webgpu\"), so it is compiled out on Emscripten. Its gles alias does include Emscripten.",
+    "urls": [
+     "https://raw.githubusercontent.com/libsdl-org/SDL/release-3.4.20/docs/README-platforms.md",
+     "https://raw.githubusercontent.com/libsdl-org/SDL/main/docs/README-emscripten.md",
+     "https://github.com/libsdl-org/SDL/issues/6810",
+     "https://static.crates.io/crates/wgpu/wgpu-30.0.2.crate"
+    ]
+   },
+   {
+    "id": "E6",
+    "verdict": "confirmed",
+    "evidence": "crates.io: iced 0.14.0 (2025-12-07, still the latest release) depends on iced_wgpu ^0.14.0, which depends on wgpu ^27.0. README.md:44 at tag 0.14.0 (and on master) says \"Iced is currently experimental software.\"",
+    "urls": [
+     "https://crates.io/api/v1/crates/iced_wgpu/0.14.0/dependencies",
+     "https://crates.io/api/v1/crates/iced/0.14.0/dependencies",
+     "https://raw.githubusercontent.com/iced-rs/iced/0.14.0/README.md",
+     "https://api.github.com/repos/iced-rs/iced/releases/latest"
+    ]
+   }
+  ]
+ },
+ {
+  "results": [
+   {
+    "id": "A1",
+    "verdict": "confirmed",
+    "evidence": "ValveSoftware/wine branch experimental_11.0 (it is a branch; there is no tag of that name). window.c:3155-3170: in X11DRV_CreateWindow, when hwnd == NtUserGetDesktopWindow() and the winstation is WinSta0, the code sets data->xinput2_rawinput = TRUE and calls x11drv_xinput2_enable(display, DefaultRootWindow). mouse.c:358-361 sets the XI_RawMotion mask only when window == DefaultRootWindow. mouse.c:1835 has flags = xinput2_rawinput ? SEND_HWMSG_NO_MSG : SEND_HWMSG_NO_RAW. map_raw_event_coords (mouse.c:1764-1803) sets x_raw = *raw_values and dx = round(x_raw) when send_raw. Then NtUserSendHardwareInput(0, flags, ...). server/queue.c:2320 returns before posting a window message when SEND_HWMSG_NO_MSG is set, so only WM_INPUT is produced. event.c:439/447 also skip the cursor path for the rawinput thread. Two caveats: the raw path applies only to relative-mode X/Y valuators (absolute devices get scaled valuator values), and the values are rounded to integers.",
+    "urls": [
+     "https://github.com/ValveSoftware/wine/blob/experimental_11.0/dlls/winex11.drv/mouse.c",
+     "https://github.com/ValveSoftware/wine/blob/experimental_11.0/dlls/winex11.drv/window.c",
+     "https://github.com/ValveSoftware/wine/blob/experimental_11.0/server/queue.c",
+     "https://github.com/ValveSoftware/wine/blob/experimental_11.0/include/ntuser.h"
+    ],
+    "corrected_statement": "Accurate as stated, with two caveats. The raw-only WM_INPUT path is used only by the WinSta0 desktop-window thread and only for relative-mode valuators. Absolute devices send scaled valuator values instead of raw_values, and dx/dy are rounded to integers."
+   },
+   {
+    "id": "A2",
+    "verdict": "confirmed",
+    "evidence": "libinput.h (main), doc of libinput_event_pointer_get_dx_unaccelerated: \"Relative unaccelerated motion deltas are raw device coordinates.\" It continues: \"subject to the device's native resolution\", and \"Any rotation applied to the device also applies to unaccelerated motion\". The 'not normalised to 1000 DPI' detail comes from doc/user/normalization-of-relative-motion.rst rather than the API header: \"This normalization only applies to accelerated coordinates, unaccelerated coordinates are left in device-units.\" xf86-input-libinput xf86libinput.c:1665-1670 calls valuator_mask_set_unaccelerated(mask, 0, x, ux). In xserver dix/getevents.c:211-225 and 1392, set_raw_valuators(..., TRUE, raw->valuators.data_raw) uses the unaccelerated values for the XI2 raw_values.",
+    "urls": [
+     "https://gitlab.freedesktop.org/libinput/libinput/-/raw/main/src/libinput.h",
+     "https://gitlab.freedesktop.org/libinput/libinput/-/raw/main/doc/user/normalization-of-relative-motion.rst",
+     "https://gitlab.freedesktop.org/xorg/driver/xf86-input-libinput/-/raw/master/src/xf86libinput.c",
+     "https://gitlab.freedesktop.org/xorg/xserver/-/raw/master/dix/getevents.c"
+    ],
+    "corrected_statement": "Accurate. Small attribution fix: the 'not normalised to 1000 DPI' statement is in libinput's normalization-of-relative-motion user doc, not the API doc comment. The API doc says the values are raw device coordinates at native resolution, with rotation applied."
+   },
+   {
+    "id": "A3",
+    "verdict": "confirmed",
+    "evidence": "source-sdk-2013 master, src/game/client/in_mouse.cpp:57 has ConVar_ServerBounded(\"m_pitch\",\"0.022\", ...), and line 88 has static ConVar m_yaw(\"m_yaw\",\"0.022\", ...). The m_pitch GetFloat override clamps it to +/-0.022 unless sv_cheats is on. view.cpp:990-997: ScaleFOVByWidthRatio returns 2*atan(tan(fov/2)*ratio). view.cpp:1075 sets aspectRatio = GetScreenAspectRatio()*0.75f, commented '/ (4/3)', which gives a 4:3 basis. Computed: 90 deg at 16:9 gives 106.2602 deg. Optional cap: sv_restrict_aspect_ratio_fov limits the ratio to 1.85:1.",
+    "urls": [
+     "https://github.com/ValveSoftware/source-sdk-2013/blob/master/src/game/client/in_mouse.cpp",
+     "https://github.com/ValveSoftware/source-sdk-2013/blob/master/src/game/client/view.cpp"
+    ],
+    "corrected_statement": "Accurate. Nuances: m_pitch is a server-bounded convar clamped to +/-0.022 unless sv_cheats is on. ScaleFOVByWidthRatio is the generic tan-scaling helper, and the 4:3 basis comes from the caller (aspect*0.75 in SetUpViews)."
+   },
+   {
+    "id": "A4",
+    "verdict": "confirmed",
+    "evidence": "aimlabs.com/terms-of-service shows 'Last Updated: Nov 1, 2025'. Section 12, 'Admit One to Statespace.': the license is \"solely for your personal and non-commercial purposes\". It bars (d) reverse engineering, (e) \"use the Content or Services to train a machine learning or AI model\", and (f) \"use any automated or programmatic method to extract data or output from the Services\". Section 15, 'Play Nice and Play Fair.', bars use \"for any commercial purpose\" and attempts to \"decompile, disassemble or reverse engineer\".",
+    "urls": [
+     "https://aimlabs.com/terms-of-service"
+    ],
+    "corrected_statement": "Accurate. Section 12 itself also prohibits reverse engineering (12(d)) and restricts use to personal, non-commercial purposes, in addition to section 15."
+   },
+   {
+    "id": "A5",
+    "verdict": "confirmed",
+    "evidence": "Directive 2009/24/EC, OJ L 111/16. Art. 5(3): \"The person having a right to use a copy of a computer program shall be entitled ... to observe, study or test the functioning of the program\". The stated purpose is to determine its underlying ideas and principles, while loading, displaying, running, transmitting or storing it as entitled. Art. 8, second paragraph: \"Any contractual provisions contrary to Article 6 or to the exceptions provided for in Article 5(2) and (3) shall be null and void.\"",
+    "urls": [
+     "https://publications.europa.eu/resource/celex/32009L0024.ENG.xhtml",
+     "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32009L0024"
+    ],
+    "corrected_statement": "Accurate. Precise scope: Art. 5(3) covers 'the person having a right to use a copy'. Observation must aim to determine underlying ideas and principles and happen during acts the user is entitled to perform (loading, displaying, running, transmitting, storing). Art. 8 (2nd para) voids contract terms contrary to Art. 5(2), 5(3) and Art. 6."
+   }
+  ]
+ },
+ {
+  "results": [
+   {
+    "id": "S1",
+    "verdict": "confirmed",
+    "evidence": "The advisory-db file crates/bincode/RUSTSEC-2025-0141.md (dated 2025-12-16) has informational = \"unmaintained\", patched = [] and the line \"the bincode team has taken the decision to cease development permanently\"; it calls 1.3.3 complete and suggests wincode, postcard, bitcode and rkyv instead. The crates.io API shows bincode 3.0.0 published 2025-12-16 and not yanked. I downloaded that crate: its only source file, src/lib.rs, is compile_error!(\"https://xkcd.com/2347/\");. Besides that it holds only Cargo files, the LICENSE and the README.",
+    "urls": [
+     "https://github.com/rustsec/advisory-db/blob/main/crates/bincode/RUSTSEC-2025-0141.md",
+     "https://rustsec.org/advisories/RUSTSEC-2025-0141.html",
+     "https://crates.io/api/v1/crates/bincode",
+     "https://crates.io/api/v1/crates/bincode/3.0.0/download"
+    ]
+   },
+   {
+    "id": "S2",
+    "verdict": "partly",
+    "corrected_statement": "createSyncAccessHandle() and FileSystemSyncAccessHandle exist only in dedicated Web Workers (the spec marks them [Exposed=DedicatedWorker]). Per web-features, OPFS became Baseline newly available in March 2023: on 2023-03-14 for createSyncAccessHandle and the handle methods, with Chrome 102, Firefox 111 and Safari 15.2, and on 2023-03-27 for the fully synchronous form, once Safari 16.4 shipped. It became Baseline widely available in September 2025 (2025-09-14 and 2025-09-27), not March 2023. read() and write() have always been synchronous. flush(), getSize(), truncate() and close() returned Promises in Chrome 102-107 and Safari 15.2-16.3. They are synchronous only from Chrome 108 (Android 109), Firefox 111 and Safari 16.4.",
+    "evidence": "The WHATWG fs spec index.bs puts [Exposed=DedicatedWorker] on createSyncAccessHandle() and on the FileSystemSyncAccessHandle interface. BCD api/FileSystemSyncAccessHandle.json has a separate sync_version entry for close, flush, getSize and truncate: Chrome 108, Firefox 111, Safari 16.4. The web-features file origin-private-file-system.yml.dist lists baseline_low_date 2023-03-27 and baseline_high_date 2025-09-27 for the overall feature and the sync_version entries, and 2023-03-14 / 2025-09-14 for createSyncAccessHandle and the handle methods. The note on BCD PR #20732 says Chrome has the synchronous version since 108 and Safari since 16.4.",
+    "urls": [
+     "https://github.com/whatwg/fs/blob/main/index.bs",
+     "https://github.com/mdn/browser-compat-data/blob/main/api/FileSystemSyncAccessHandle.json",
+     "https://github.com/web-platform-dx/web-features/blob/main/features/origin-private-file-system.yml.dist",
+     "https://github.com/mdn/browser-compat-data/pull/20732"
+    ]
+   },
+   {
+    "id": "S3",
+    "verdict": "partly",
+    "corrected_statement": "MDN and the HR Time spec give 100 microseconds when the page is not cross-origin isolated and 5 microseconds when it is, but the spec treats these as minimums (\"or a higher implementation-defined value\"). Only Chromium uses exactly 100 \u00b5s and 5 \u00b5s. Firefox coarsens to 1 ms with jitter when the page is not cross-origin isolated (pref privacy.resistFingerprinting.reduceTimerPrecision.microseconds = 1000) and to 20 \u00b5s when it is. Safari (WebKit) uses 1 ms when the page is not cross-origin isolated and 20 \u00b5s when it is.",
+    "evidence": "MDN performance.now lists \"Resolution in isolated contexts: 5 microseconds\" and 100 microseconds for non-isolated ones. The HR Time spec says 100 microseconds \"or a higher implementation-defined value\", and 5 microseconds when cross-origin isolated. Chromium time_clamper.h sets kCoarseResolutionMicroseconds = 100 and kFineResolutionMicroseconds = 5. In Firefox nsRFPService.cpp, cross-origin isolated callers get UnconditionalAKAHighRes, which is 20 \u00b5s (RFP_TIMER_UNCONDITIONAL_VALUE). Other callers get the Normal setting, which uses the pref default of 1000 \u00b5s with jitter on. In WebKit, Performance.cpp has timePrecision { 1_ms }. When the page is cross-origin isolated, ScriptExecutionContext calls allowHighPrecisionTime(), and highTimePrecision() returns 20 microseconds.",
+    "urls": [
+     "https://github.com/mdn/content/blob/main/files/en-us/web/api/performance/now/index.md",
+     "https://w3c.github.io/hr-time/",
+     "https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/timing/time_clamper.h",
+     "https://github.com/mozilla-firefox/firefox/blob/main/toolkit/components/resistfingerprinting/nsRFPService.cpp",
+     "https://github.com/mozilla-firefox/firefox/blob/main/modules/libpref/init/StaticPrefList.yaml",
+     "https://github.com/WebKit/WebKit/blob/main/Source/WebCore/page/Performance.cpp",
+     "https://github.com/WebKit/WebKit/blob/main/Source/WTF/wtf/Seconds.h",
+     "https://github.com/WebKit/WebKit/blob/main/Source/WebCore/dom/ScriptExecutionContext.cpp"
+    ]
+   },
+   {
+    "id": "S4",
+    "verdict": "confirmed",
+    "evidence": "At tag 60.1.0, .github/workflows/parquet.yml has a job named wasm32-build. It runs `cargo build -p parquet --target wasm32-unknown-unknown` (and wasm32-wasip1) with default features, after installing clang. In the latest main run that job, \"Build wasm32\", succeeded. parquet/Cargo.toml at 60.1.0 has default features arrow, snap, brotli, flate2-zlib-rs, lz4 (= lz4_flex), zstd, base64 and simdutf8. flate2 can use either the zlib-rs backend or rust_backend (miniz_oxide). zstd 0.14 depends on zstd-safe 8, which depends on zstd-sys, described as \"bindings for the zstd compression library\" (the bundled C library). The current parquet versions are 60.1.0 (2026-10-28) and 60.0.0 (2026-09-15).",
+    "urls": [
+     "https://github.com/apache/arrow-rs/blob/60.1.0/.github/workflows/parquet.yml",
+     "https://github.com/apache/arrow-rs/blob/60.1.0/parquet/Cargo.toml",
+     "https://crates.io/api/v1/crates/parquet",
+     "https://crates.io/api/v1/crates/zstd-safe/8.3.0/dependencies",
+     "https://crates.io/crates/zstd-sys"
+    ]
+   },
+   {
+    "id": "S5",
+    "verdict": "confirmed",
+    "evidence": "The parquet-wasm README on main (latest release v0.9.0, 2026-09-25) says: \"Including read and write support and all compression codecs, the brotli-compressed WASM bundle is 1.2 MB\". It also says a minimal read-only build with no compression can be 456 KB brotli-compressed. These are the project's own reported figures; I did not re-measure them.",
+    "urls": [
+     "https://github.com/kylebarron/parquet-wasm/blob/main/README.md",
+     "https://github.com/kylebarron/parquet-wasm/releases"
+    ]
+   },
+   {
+    "id": "S6",
+    "verdict": "partly",
+    "corrected_statement": "The opfs-sahpool VFS does not need COOP/COEP headers and works only in Worker threads. Concurrency is limited rather than absent. It does not support several simultaneous connections to the same database, with two exceptions: connections within the same thread (versions before 3.54 have a locking bug that can corrupt the database in that case), and connections coordinated by client code through PoolUtil.pauseVfs() and unpauseVfs(), available since 3.50. Only one instance of the VFS per origin and directory can be installed at a time, so a second tab fails to install it.",
+    "evidence": "In the sqlite.org persistence.md section on opfs-sahpool, the listed advantages include \"Does not require COOP/COEP HTTP headers (and associated restrictions)\". The listed disadvantages include no multiple simultaneous connections to the same database, except within the same thread or with explicit help from client code. The page also says installation fails when the OPFS APIs are missing, because \"They are only available in Worker threads, not the main UI thread\". It describes pauseVfs() and unpauseVfs() as a way to hand the files to another tab or Worker.",
+    "urls": [
+     "https://sqlite.org/wasm/doc/trunk/persistence.md"
+    ]
+   }
+  ]
+ },
+ {
+  "results": [
+   {
+    "id": "D1",
+    "verdict": "partly",
+    "evidence": "glam-0.34.3 crate (sse2.rs and neon.rs are identical to 0.34.0). Vec4 and Quat dot: sse2.rs dot4_into_m128 says \"keeping the (x + z) + (y + w) grouping\". neon.rs dot4 uses vaddvq_f32, which adds in pairs as (x+y)+(z+w). f32/scalar/vec4.rs:244 sums left to right, ((x+y)+z)+w. Vec3A dot is the same everywhere: SSE2 dot3_in_x does _mm_add_ss(x+y, z), f32/neon/vec3a.rs:255 uses the plain scalar expression (\"this was faster than intrinsics\"), and scalar is (x+y)+z. No dot function uses FMA. Under cfg(target_feature=\"fma\"), m128_mul_add/m128_neg_mul_sub (sse2.rs:133-160) are used by Vec3A::cross, Quat mul, slerp, lerp_monotonic, mul_add and sin_cos. NEON calls vfmaq_f32 always, with no feature gate (quat.rs:707/833, vec4.rs:1045/1155). src/f64/ contains no arch:: or SIMD code, and DVec3::dot and DQuat::dot are plain scalar.",
+    "urls": [
+     "https://github.com/bitshifter/glam-rs/blob/0.34.3/src/sse2.rs",
+     "https://github.com/bitshifter/glam-rs/blob/0.34.3/src/neon.rs",
+     "https://github.com/bitshifter/glam-rs/blob/0.34.3/src/f32/neon/vec3a.rs",
+     "https://github.com/bitshifter/glam-rs/blob/0.34.3/src/f32/scalar/vec4.rs",
+     "https://github.com/bitshifter/glam-rs/blob/0.34.3/src/f64/dvec3.rs",
+     "https://static.crates.io/crates/glam/glam-0.34.3.crate"
+    ],
+    "corrected_statement": "In glam 0.34.x, the summation order differs by backend only for 4-wide dot products (Vec4, Quat): SSE2 sums (x+z)+(y+w), NEON (x+y)+(z+w), and scalar ((x+y)+z)+w. Vec3A dot sums (x+y)+z on SSE2, NEON and scalar alike. No dot product uses FMA. The SSE2 backend uses FMA only when target_feature=\"fma\" is enabled, in cross, Quat mul, slerp, lerp_monotonic, mul_add and sin/cos. The NEON backend uses vfmaq unconditionally in Quat mul, slerp, lerp_monotonic and mul_add. The f64 types (DVec*, DQuat, DMat*) have only a scalar implementation."
+   },
+   {
+    "id": "D2",
+    "verdict": "confirmed",
+    "evidence": "In std library/std/src/num/f32.rs (stable), sin, cos, atan2, powf, exp, ln (and tan, hypot, powi) each carry the note: \"The precision of this function is non-deterministic. This means it varies by platform, Rust version, and can even differ within the same execution\". sqrt and mul_add say the result \"is guaranteed to be the rounded infinite-precision result\" and name the IEEE 754 operation (squareRoot / fusedMultiplyAdd). RFC 3514 covers +, -, *, /, %, abs, copysign, mul_add, sqrt and casts, which \"produce results that exactly match IEEE 754-2008\". Exceptions: NaN bit patterns, and known non-conforming targets such as i586/x87.",
+    "urls": [
+     "https://doc.rust-lang.org/std/primitive.f32.html#method.sin",
+     "https://github.com/rust-lang/rust/blob/stable/library/std/src/num/f32.rs",
+     "https://github.com/rust-lang/rfcs/blob/master/text/3514-float-semantics.md"
+    ],
+    "corrected_statement": "Confirmed. One caveat: RFC 3514's exact-IEEE guarantee excludes NaN sign and payload bits, which are non-deterministic, and is knowingly violated on 32-bit x86 without SSE2 (x87 excess precision, tracking issue #114479)."
+   },
+   {
+    "id": "D3",
+    "verdict": "confirmed",
+    "evidence": "RFC 3514 makes * and + exactly IEEE, and its rationale says this \"precludes many transformations, such as turning a*b + c into FMA\". It adds that such transformations require \"explicit opt-in\". rustc's PassWrapper.cpp (main) never sets AllowFPOpFusion, so LLVM keeps its default FPOpFusion::Standard, which allows \"fusion of 'blessed' ops (currently just fmuladd)\" (TargetOptions.h, llvmorg-20.1.0). rustc emits fast-math or contract flags only for the explicit fadd_fast and *_algebraic intrinsics (rustc_codegen_llvm builder.rs:611-620). The relaxed fmuladd semantics are exposed only as explicit opt-in methods (mul_add_relaxed, PR #151793, merged). The NVPTX backend fuses only when -nvptx-fma-level is passed, Fast fusion is set, or unsafe-fp-math is on.",
+    "urls": [
+     "https://github.com/rust-lang/rfcs/blob/master/text/3514-float-semantics.md",
+     "https://github.com/rust-lang/rust/blob/main/compiler/rustc_llvm/llvm-wrapper/PassWrapper.cpp",
+     "https://github.com/rust-lang/rust/blob/main/compiler/rustc_codegen_llvm/src/builder.rs",
+     "https://github.com/llvm/llvm-project/blob/llvmorg-20.1.0/llvm/include/llvm/Target/TargetOptions.h",
+     "https://github.com/llvm/llvm-project/blob/llvmorg-20.1.0/llvm/lib/Target/NVPTX/NVPTXISelLowering.cpp",
+     "https://github.com/rust-lang/rust/pull/151793",
+     "https://github.com/rust-lang/rust/issues/114479"
+    ],
+    "corrected_statement": "Confirmed for the default LLVM backend. Contraction happens only on explicit opt-in: f32::mul_add, mul_add_relaxed, the algebraic_* methods, or user-passed -C llvm-args such as -fp-contract=fast or -nvptx-fma-level. Separately, i586 (x87) targets do not round a*b+c to IEEE results because of excess precision; this is not FMA fusion."
+   },
+   {
+    "id": "D4",
+    "verdict": "confirmed",
+    "evidence": "Rand book crate-reprod.md declares rand::rngs::SmallRng and rand::rngs::StdRng \"non-portable\", meaning each \"opts out of all reproducibility guarantees\". rand CHANGELOG 0.9.0 lists: Uniform now uses Canon's and Lemire's methods \"(breaks value stability; #1287)\"; \"New, faster algorithms for SliceRandom::shuffle and partial_shuffle (#1272)\"; and new algorithms for IteratorRandom::choose (#1268). rand 0.10.0 (2026-02-08): \"The dependency on rand_chacha has been replaced with a dependency on chacha20\", and StdRng output remains the same. The current release is 0.10.3.",
+    "urls": [
+     "https://github.com/rust-random/book/blob/master/src/crate-reprod.md",
+     "https://rust-random.github.io/book/crate-reprod.html",
+     "https://github.com/rust-random/rand/blob/master/CHANGELOG.md",
+     "https://crates.io/crates/rand"
+    ],
+    "corrected_statement": "Confirmed. Two details: the book's non-portable-items policy applies from rand 0.10 (up to 0.9, non-portable items could not change values in patch releases), and the 0.10 switch to chacha20 kept StdRng output unchanged."
+   },
+   {
+    "id": "D5",
+    "verdict": "partly",
+    "evidence": "libm 0.2.16 (2026-01-24, the latest) describes itself as \"libm in pure Rust\". 52 source files carry \"origin: FreeBSD\" headers inherited from musl, and cbrt is ported from CORE-MATH. src/math/arch/mod.rs overrides only exactly-rounded ops on the three targets. x86 with SSE2: sqrt, sqrtf, fma, fmaf (fma picks hardware or software at runtime, both exact). aarch64: fma, rint, sqrt. wasm32: ceil, fabs, floor, rint, sqrt, trunc, and only with the unstable-intrinsics cfg. The only transcendental overrides are x87 exp/exp2/exp10 on x86 without SSE. Neither the README nor the docs states a cross-platform identical-results guarantee. NaNs are produced arithmetically, e.g. log.rs:88 `(x - x) / 0.0` and pow.rs:217 `(x - x) / (x - x)`, so per RFC 3514 their bit patterns are hardware-dependent (x86 default NaN has the sign bit set; ARM and wasm do not).",
+    "urls": [
+     "https://crates.io/crates/libm/0.2.16",
+     "https://static.crates.io/crates/libm/libm-0.2.16.crate",
+     "https://github.com/rust-lang/compiler-builtins/tree/master/libm/src/math/arch",
+     "https://github.com/rust-lang/rfcs/blob/master/text/3514-float-semantics.md"
+    ],
+    "corrected_statement": "libm 0.2.16 is a pure-Rust libm, mostly ported from musl/FreeBSD msun, with some newer code such as CORE-MATH cbrt and generic rewrites. On x86_64, aarch64 and wasm32 it overrides only exactly-rounded ops (sqrt, fma, rint, and on wasm32 with unstable intrinsics also floor, ceil, trunc and fabs), and its transcendental code paths are the same on all three. Because Rust guarantees IEEE basic ops with no contraction, non-NaN results should therefore be bit-identical. This follows from reading the source; libm documents no such guarantee. NaN sign and payload bits can differ by architecture. On i586 (x86 without SSE), x87 overrides exist for exp, exp2 and exp10."
+   }
+  ]
+ }
+]
