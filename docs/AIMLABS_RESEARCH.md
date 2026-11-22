@@ -56,7 +56,7 @@ Notation: k = degrees of yaw per count at sensitivity 1; s = in-game sensitivity
 | Yaw per count | θ = k·s | VERIFIED for engines with published source (below); assumed linear for others until measured |
 | cm/360 | cm360 = 2.54 · 360 / (k · s · CPI) | VERIFIED (derivation). e.g. k = 0.022, s = 1, 800 CPI → 51.95 cm |
 | Same-feel conversion (equal cm/360) | s₂ = s₁ · k₁ / k₂ (same CPI) | VERIFIED (derivation) |
-| Source engine (SDK 2013) | `m_yaw` = `m_pitch` = 0.022 default; `viewangles[YAW] += m_yaw * mouse_x` after scaling by `sensitivity` | VERIFIED (source code) |
+| Source engine (SDK 2013) | `m_yaw` = `m_pitch` = 0.022 default; `viewangles[YAW] -= m_yaw * mouse_x` after `ScaleMouse` applies `sensitivity` (`src/game/client/in_mouse.cpp` @3e957b70b167) | VERIFIED (source code) |
 | Quake III | `m_yaw` = `m_pitch` = 0.022 | VERIFIED (source code) |
 | CS2, Apex Legends | 0.022 | COMMUNITY-ESTABLISHED |
 | Overwatch 2 | 0.0066 | COMMUNITY-ESTABLISHED |
@@ -64,7 +64,7 @@ Notation: k = degrees of yaw per count at sensitivity 1; s = in-game sensitivity
 | Rainbow Six Siege | Published structure (yaw = input yaw × multiplier unit × sens); base constant unpublished | VERIFIED (structure) / UNKNOWN (constant) |
 | **Aimlabs native scale** | — | **UNKNOWN** |
 | Horizontal ↔ vertical FOV | H = 2·atan(tan(V/2)·AR); V = 2·atan(tan(H/2)/AR) | VERIFIED (geometry) |
-| Hor+ from a 4:3 basis (Source) | H = 2·atan(tan(H₄:₃/2)·(AR / (4/3))); 90° → 106.26° at 16:9 | VERIFIED (Source SDK `ScaleFOVByWidthRatio`) |
+| Hor+ from a 4:3 basis (Source) | H = 2·atan(tan(H₄:₃/2)·(AR / (4/3))); 90° → 106.26° at 16:9. The engine caps AR at 1.85:1 when `sv_restrict_aspect_ratio_fov` is 2, or > 0 in windowed multiplayer (`view.cpp`) | VERIFIED (Source SDK `ScaleFOVByWidthRatio`, `src/game/client/view.cpp` @3e957b70b167) for AR ≤ 1.85:1 or with the restriction off |
 | Aimlabs FOV field with the CS profile behaves like Source 4:3 Hor+ | a single community report ("FOV 90 → 73.74° V / 106.26° H at 16:9", one aspect ratio) is consistent with Source 4:3-basis Hor+ — a **hypothesis** for AL-E2 to test at ≥2 aspect ratios; not implemented as a profile before then | REQUIRES FURTHER VALIDATION |
 | Monitor-distance match at fraction p of the half-width | s₂/s₁ = atan(p·tan(H₂/2)) / atan(p·tan(H₁/2)) | VERIFIED (derivation); "MDH/MDV %" naming COMMUNITY-ESTABLISHED |
 | 0 % match ("focal length", zoom ratio) | p → 0: s₂/s₁ = tan(H₂/2) / tan(H₁/2) | VERIFIED (derivation) |
@@ -74,7 +74,7 @@ Notation: k = degrees of yaw per count at sensitivity 1; s = in-game sensitivity
 | Hipfire vs ADS in Aimlabs | separate ADS/scoped multiplier; Creator Studio weapons carry a `zoomRatio` | VERIFIED (multiplier exists) / INFERRED (zoomRatio) / UNKNOWN (rule) |
 | Vertical ratio, acceleration, raw-input toggle, smoothing, quantisation in Aimlabs | not documented | UNKNOWN |
 | Input quantisation and smoothing in general | integer counts per report; any smoothing is application-side | VERIFIED (HID semantics) for counts; application behaviour must be measured |
-| Coordinate conventions | engines differ in handedness and sign of yaw (Source adds, Quake subtracts `m_yaw * mx`) | VERIFIED (source); KineForge's convention is fixed in DATA_SPECIFICATION.md §2.2 |
+| Coordinate conventions | Source and Quake III both subtract `m_yaw * mx` from a yaw that increases to the left (Source's `+=` is only Portal's upside-down branch); KineForge's yaw increases to the right | VERIFIED (source: Source `in_mouse.cpp`, Quake III `code/client/cl_input.c` @dbe4ddb10315); KineForge's convention is fixed in DATA_SPECIFICATION.md §2.2 |
 
 **Rule for KineForge:** sensitivity "game profiles" in KineForge carry their constant, its label (VERIFIED / COMMUNITY-ESTABLISHED / INFERRED-by-experiment-ID) and source. No profile for Aimlabs's native scale exists until experiment AL-E1 produces one, and it will carry its experiment ID and confidence interval.
 

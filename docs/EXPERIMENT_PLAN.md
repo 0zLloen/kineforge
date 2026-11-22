@@ -22,12 +22,14 @@ unit test of the sensitivity formula does not establish that a game uses it).
 
 ### 0.2 Claim status (`claim_status`; the single definition used by every document)
 
-- **VERIFIED** — primary documentation or source code, the local system observed directly, or our own code under test.
-- **EXPERIMENTALLY OBSERVED** — measured by a procedure in this file; reported with n, spread, and the rig used.
-- **INFERRED** — derived from verified facts or observations by stated reasoning or a named model.
-- **COMMUNITY-ESTABLISHED** — widely used community value with no primary source found.
-- **UNKNOWN** — not established.
-- **REQUIRES FURTHER VALIDATION** — single observation, unreplicated, rig not yet characterised, or sources conflicting / weakly sourced.
+- **VERIFIED** (`verified`) — primary documentation or source code, the local system observed directly, or our own code under test.
+- **EXPERIMENTALLY OBSERVED** (`experimentally_observed`) — measured by a procedure in this file; reported with n, spread, and the rig used.
+- **INFERRED** (`inferred`) — derived from verified facts or observations by stated reasoning or a named model.
+- **COMMUNITY-ESTABLISHED** (`community_established`) — widely used community value with no primary source found.
+- **UNKNOWN** (`unknown`) — not established.
+- **REQUIRES FURTHER VALIDATION** (`requires_further_validation`) — single observation, unreplicated, rig not yet characterised, or sources conflicting / weakly sourced.
+
+The upper-case labels are display forms; the values in parentheses are the on-disk (JSON) spellings (`kf-core` `ClaimStatus`).
 
 ### 0.3 Common controls
 

@@ -21,7 +21,7 @@ what it depends on:
  Layer 1  kf-sim ─▶ kf-core, kf-dirgain   kf-telemetry ─▶ kf-core
           kf-analytics ─▶ kf-core, kf-telemetry          kf-calib ─▶ kf-analytics, kf-dirgain
 
- Layer 0  kf-core (no deps beyond optional serde)        kf-dirgain (no_std, zero deps)
+ Layer 0  kf-core (libm; optional serde)                 kf-dirgain (no_std, zero deps)
 ```
 
 There are no cycles and no edges between `kf-sim` and `kf-telemetry`: both
@@ -37,7 +37,7 @@ on it alone. Otherwise it is a module. This keeps the crate count at ≈10.
 
 | Crate | Layer | Responsibility | Depends on | Targets |
 |---|---|---|---|---|
-| `kf-core` | 0 | Units & newtypes; `InputLevel`, `EvidenceClass`, `ClaimStatus`, clock-domain enums; **all plain-data record types** (`InputEvent`, `Motion`, `Stamp`, `Source`, `Gap`, `FrameRecord`, `Drain`, `FrameTiming`, `SimControl`, `SimCamera`, `SimTarget`, `SimShot`, `Annotation`) and the immutable `SceneView` passed to renderers; sensitivity mathematics (yaw/pitch per unit, cm/360, FOV h↔v, Hor+/Vert−, monitor-distance matching, profile conversion with `claim_status`-labelled constants) | `serde` (optional) | all incl. wasm |
+| `kf-core` | 0 | Units & newtypes; `InputLevel`, `EvidenceClass`, `ClaimStatus`, clock-domain enums; **all plain-data record types** (`InputEvent`, `Motion`, `Source`, `Gap`, `FrameRecord`, `Drain`, `FrameTiming`, `SimControl`, `SimCamera`, `SimTarget`, `SimShot`, `Annotation`) and the immutable `SceneView` passed to renderers; sensitivity mathematics (yaw/pitch per unit, cm/360, FOV h↔v, Hor+/Vert−, monitor-distance matching, profile conversion with `claim_status`-labelled constants) | `libm =0.2.16`, `serde` (optional) | all incl. wasm |
 | `kf-dirgain` | 0 | Bit-exact port of Open Directional DPI: engine, 28-byte profile, CRC, capabilities, **vendor-HID packet encode/decode** (pure); conformance vectors shared with the C oracle | none | all, `#![no_std]` |
 | `kf-sim` | 1 | Fixed-tick clock over simulation time τ; camera from integer unit totals; analytic target trajectories; scenario definitions and task families; own seeded RNG + samplers; ray–sphere/capsule/box hit tests; **`score`** module (bit-exact metrics only: hits, kills, accuracy, time-to-hit/acquire, angular error at shot, on-target ticks; declarative score models); **`experiment`** module (seeded condition/block schedules, ABBA/Latin-square counterbalancing, warm-up flags, block annotations, linked one-session-per-block runs); **replay driver** (frame-by-frame, DATA_SPECIFICATION.md §9.1) | `kf-core`, `kf-dirgain`, `glam` (f64 types, `libm` feature), `libm =0.2.16`, `serde` | all incl. wasm |
 | `kf-telemetry` | 1 | KFLOG v1 encoder (pure: records → chunk groups), reader (records/iterators), recovery scan + sidecar, validator, migrations, session/analysis manifests, `.kfz` packing; Parquet export behind feature `parquet` | `kf-core`, `crc32fast`, `serde_json` (`float_roundtrip`); optional `parquet`/`arrow`, `zip` | all incl. wasm |
@@ -76,21 +76,22 @@ wasm-bindgen output, a ≈30-line OPFS writer worker, the service worker and
 **Event types** (`kf-core`, plain data):
 
 ```rust
-pub struct Stamp { pub ns: i64, pub clock: Clock, pub res_ns: u32, pub meaning: Meaning }
 pub struct Motion {
-    pub seq: u32,              // one counter per source shared by motion/button/wheel; motion before button within a report
-    pub source: u16,           // declared source id (new id per pointer-lock acquisition; absolute packets → own source)
-    pub dx: i32, pub dy: i32,  // × the source's value_scale
-    pub t_src: Option<Stamp>,  // the source's own stamp, unmodified
-    pub t_rx: Stamp,           // receipt on the session clock (always present)
-    pub flags: u16,            // COALESCED | BACKGROUND | ABSOLUTE | SUSPECT_INJECTED | CLAMPED | HI_RES
+    pub t_ns: Nanos,               // receipt on the session clock (always present)
+    pub src_ts_ns: Option<Nanos>,  // the source's own stamp in its clock domain, unmodified
+    pub dx: i32, pub dy: i32,      // source units × value_scale
+    pub seq: u32,                  // one counter per source shared by motion/button/wheel; motion before button within a report
+    pub source: SourceId,          // declared source id (new id per pointer-lock acquisition; absolute packets → own source)
+    pub flags: u16,                // COALESCED | BACKGROUND | ABSOLUTE | SUSPECT_INJECTED | CLAMPED | HI_RES
 }
-pub enum InputEvent {
-    Motion(Motion), Button { .. }, Wheel { .. },
-    Gap { source: u16, first_seq: u32, lost: u32, reason: GapReason, t_rx: Stamp },
-    Declare(SourceInfo), Device(DeviceInfo),
-}
+pub enum InputEvent { Motion(Motion), Button(Button), Wheel(Wheel), Gap(Gap) }
 ```
+
+The fields mirror the `input_*` records and gap annotations
+(DATA_SPECIFICATION.md §6); clock domain, resolution, stamp meaning, units and
+`value_scale` are per-source facts carried once in the source declaration, not
+per event. Source declarations and device info travel on the side channel
+below as their JSON records (M4/M6).
 
 **Native capture backends** implement one trait (several real
 implementations). Stopping uses a backend-provided wake, because backends

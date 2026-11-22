@@ -8,3 +8,7 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+# Exact pin: an algorithm change would change results (STACK_DECISION.md §7).
+libm = "=0.2.16"

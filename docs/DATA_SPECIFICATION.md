@@ -80,7 +80,7 @@ Levels follow the pipeline taxonomy L1–L7 (TECH_STACK_RESEARCH.md §3.4); a sa
 
 An `os_unaccelerated` source may carry `counts_equivalent_verified: <experiment id>` once a dual-source ratio test against an L1 source (EXPERIMENT_PLAN E1) shows a ratio of exactly 1 on that system.
 
-A source declaration (`source_declare`, §6.1) contains: `id`, `source_rank` (cross-source ordering for analysis; default = `id`), `device`, `input_level`, `units` (`counts`, `os_units`, `logical_px`, `dip`, `css_px`, `points`, `abs_65535`) with `value_scale`, `clock_domain`, `receipt_meaning`, `evidence_class`, `processing` flags (`os_accel_off_verified`, `os_accel_state_unknown`, `rotation_applied`, `dpr_scaled`, `zoom_scaled`, `coalesced`, `fractional`, `background_throttled`, `filter_driver_suspected`, `injected_test_stream`, `hid_bpf_present`, `libinput_plugins_possible`, `approx_gain_timing`), the backend (`Source` variant), granted capture-thread priority, and for browsers the lock request result (`unadjusted_movement: resolved | rejected:<error>`), the motion event type (`pointerrawupdate` | `pointermove`), DPR and zoom. Static OS configuration (acceleration profile/speed, libinput version, mouse-class `UpperFilters`, `SM_REMOTESESSION`) is included where known.
+A source declaration (`source_declare`, §6.1) contains: `id` (0–0xFFFE; 0xFFFF means "none" in annotations and `sim_control`), `source_rank` (cross-source ordering for analysis; default = `id`), `device`, `input_level`, `units` (`counts`, `os_units`, `logical_px`, `dip`, `css_px`, `points`, `abs_65535`) with `value_scale`, `clock_domain`, `receipt_meaning`, `evidence_class`, `processing` flags (`os_accel_off_verified`, `os_accel_state_unknown`, `rotation_applied`, `dpr_scaled`, `zoom_scaled`, `coalesced`, `fractional`, `background_throttled`, `filter_driver_suspected`, `injected_test_stream`, `hid_bpf_present`, `libinput_plugins_possible`, `approx_gain_timing`), the backend (`Source` variant), granted capture-thread priority, and for browsers the lock request result (`unadjusted_movement: resolved | rejected:<error>`), the motion event type (`pointerrawupdate` | `pointermove`), DPR and zoom. Static OS configuration (acceleration profile/speed, libinput version, mouse-class `UpperFilters`, `SM_REMOTESESSION`) is included where known.
 
 ### 3.2 `evidence_class`
 
@@ -91,6 +91,8 @@ A source declaration (`source_declare`, §6.1) contains: `id`, `source_rank` (cr
 | `inferred` | produced by a model from observations; references the model/experiment |
 | `simulated_truth` | ground truth from KineForge's own simulation |
 | `derived` | statistics computed from other data; references inputs by hash + algorithm version |
+
+Sources with `input_level: synthetic` declare `simulated_truth`; `replayed` sources keep the evidence class of the source they re-emit.
 
 For third-party sessions (e.g. Aimlabs), target positions and camera state are **absent** unless obtained by a permitted, verified method; they are never filled with estimates labelled as observations.
 
@@ -168,7 +170,7 @@ Only when the liveness lock is free. Scan from the start; stop at the first shor
 | 0x7E | `annotation` | sequence of `{t_ns i64, code u16, source u16 (0xFFFF = none), first_seq u32, lost u32 (u32::MAX = unknown), len u32, utf8[len], pad to 8}` | var |
 | 0x7F | `session_end` | JSON `{completed, end_reason, t_end_ns, counts per kind, dropped_chunks, max_writer_backlog_bytes, interruptions, refresh_hz_measured, raf_hz_measured}`; terminal chunk | var |
 
-### 6.2 Input (evidence `observed` / `synthetic` / `replayed` per source)
+### 6.2 Input (evidence class per source declaration, §3.2)
 
 | kind | Name | Layout | Size |
 |---|---|---|---|
@@ -259,7 +261,7 @@ Unknown values are preserved and reported, never dropped.
     "model": "linear", "yaw_rad_per_unit": 0.0003839724354387525, "pitch_rad_per_unit": 0.0003839724354387525,
     "sens_x": 1.0, "sens_y": 1.0, "invert_y": false,
     "directional_gain": null,
-    "fov": {"value_deg": 103.0, "axis": "horizontal", "aspect_mode": "hor_plus"}
+    "fov": {"value_deg": 103.0, "model": "hor_plus", "basis_aspect": [16, 9]}
   },
   "scenario": {"id": "flick.static", "version": 1, "config": {"…": "inline"}, "config_sha256": "…"},
   "scoring": {"model": "kf.flick.v1", "scoring_version": 1},
@@ -282,7 +284,7 @@ The source declaration that follows (a new one, with a new id, on every re-lock)
  "device_pixel_ratio": 1.0, "page_zoom": 1.0, "evidence_class": "observed"}
 ```
 
-Notes: Chrome's adjusted `movementX` on Linux is integer DIP (not CSS px, not fractional); Chrome-on-X11 event timestamps are X-server milliseconds (`os_dispatch`, effective resolution 1 ms) before page coarsening; `offset_to_session_ns` is minus the `performance.now()` value at session start. The sensitivity (0.022°/count in radians) is illustrative. `participant` is a random pseudonym, never personal data. Directional gain, when enabled, is stored as the ODD 28-byte v1 profile (hex) plus the KineForge engine version and saturation policy: `carry_capped` (ODD: excess carried up to ≈32767 counts, dropped beyond — OPEN_DIRECTIONAL_DPI_AUDIT.md §6) or `drop`.
+Notes: Chrome's adjusted `movementX` on Linux is integer DIP (not CSS px, not fractional); Chrome-on-X11 event timestamps are X-server milliseconds (`os_dispatch`, effective resolution 1 ms) before page coarsening; `offset_to_session_ns` is minus the `performance.now()` value at session start. The sensitivity (0.022°/count in radians) is illustrative. `fov.model` says how the value scales with the render aspect (`kf-core` `FovModel`): `hor_plus` — the value is the horizontal FOV at `basis_aspect` and the vertical FOV is kept at other aspects (Source engine: basis 4:3); `vert_minus` — the value is the horizontal FOV at every aspect; `vertical` — the value is the vertical FOV at every aspect. `participant` is a random pseudonym, never personal data. Directional gain, when enabled, is stored as the ODD 28-byte v1 profile (hex) plus the KineForge engine version and saturation policy: `carry_capped` (ODD: excess carried up to ≈32767 counts, dropped beyond — OPEN_DIRECTIONAL_DPI_AUDIT.md §6) or `drop`.
 
 **Float exactness.** Simulation-critical JSON floats must round-trip exactly: the workspace enables serde_json's `float_roundtrip` feature (tested by round-tripping random `f64`s); Python's `json` parses correctly rounded.
 

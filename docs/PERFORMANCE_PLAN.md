@@ -29,7 +29,7 @@ Frame budgets: 144 Hz = 6.94 ms, 240 Hz = 4.17 ms, 360 Hz = 2.78 ms, 500 Hz = 2.
 | N2 | Frame-start interval stability, **Fifo only**, GPU not saturated | p99 interval ≤ 1.10 × refresh period; ≤ 0.1 % intervals > 1.5 × period over 5 min (CPU frame-start timestamps; cross-checked with PresentMon on Windows and the photodiode rig) | H1, H2 | §4.2 |
 | N3 | Uncapped throughput, benchmark scene, minimal quality | ≥ 1000 fps at 1440p on H1 — a sanity check that the thin renderer is not the bottleneck at 360 Hz. **No engine comparison is planned**: the renderer decision rests on control, ordering, churn and size, not on speed | H1 | §4.2 |
 | N4a | CPU cost per input event (decode → ring push → recorder encode → sim apply), single-threaded microbenchmark | median ≤ 2 µs/event on H1; regression-tracked by instruction count | H1 | §4.3 |
-| N4b | Capture-to-sim handoff latency (t_rx → applied), multithreaded, on hardware | p99 ≤ 1 ms outside frame waits; reported as a distribution | H1 | §4.3 |
+| N4b | Capture-to-sim handoff latency (receipt `t_ns` → applied), multithreaded, on hardware | p99 ≤ 1 ms outside frame waits; reported as a distribution | H1 | §4.3 |
 | N5 | Steady-state heap allocations in **input take + sim step + telemetry encode** (headless loop) | **0** per frame after warm-up | all | counting allocator, §4.4 |
 | N6 | Renderer + UI allocations per frame | tracked metric with a ceiling set after the first measurement (egui and wgpu-core allocate per frame by design) | H1 | §4.4 |
 | N7 | Application heap (excl. GPU driver mappings), default scenario | ≤ 64 MB steady state | all | §4.4 |
@@ -65,7 +65,7 @@ Frame budgets: 144 Hz = 6.94 ms, 240 Hz = 4.17 ms, 360 Hz = 2.78 ms, 500 Hz = 2.
 Native: CPU frame-start timestamps (session clock) plus GPU timestamp queries where supported; Windows cross-check with PresentMon; external photodiode for ground truth. Browser: rAF timestamps, headed only (headless runs a synthetic ≈60 Hz). 5-minute runs, foreground, then with synthetic background CPU load, then a hide/show cycle.
 
 ### 4.3 Microbenchmarks and handoff
-Pure-CPU paths (sensitivity transform, gain step, event decode/encode, analytics kernels) with criterion (wall time) natively and gungraun (instruction counts, Linux CI) for regression detection; wasm microbenchmarks under Node for relative comparison only. Handoff latency (N4b) is measured on hardware from `t_rx` to the apply time recorded in a debug build.
+Pure-CPU paths (sensitivity transform, gain step, event decode/encode, analytics kernels) with criterion (wall time) natively and gungraun (instruction counts, Linux CI) for regression detection; wasm microbenchmarks under Node for relative comparison only. Handoff latency (N4b) is measured on hardware from the receipt time `t_ns` to the apply time recorded in a debug build.
 
 ### 4.4 Memory
 A counting `#[global_allocator]` asserts zero allocations across N steady-state iterations of the headless input→sim→encode loop (N5); renderer/UI allocations are counted per frame and tracked (N6). Heap profiles with dhat. RSS reported but not targeted (drivers dominate).
