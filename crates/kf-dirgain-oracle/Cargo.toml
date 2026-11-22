@@ -1,0 +1,24 @@
+[package]
+name = "kf-dirgain-oracle"
+description = "Native-only dev tool: the vendored Open Directional DPI C engine as an oracle for kf-dirgain (trace generator, differential fuzzer)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+kf-dirgain = { path = "../kf-dirgain" }
+
+[build-dependencies]
+cc = "1"
+
+# Not `workspace = true`: the FFI needs `unsafe`, which the workspace forbids.
+# It is denied here too and allowed only in src/c.rs (the FFI module).
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+disallowed_methods = "deny"
+disallowed_types = "deny"
+undocumented_unsafe_blocks = "deny"

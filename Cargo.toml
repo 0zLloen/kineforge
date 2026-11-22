@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/kf-core", "crates/kf-dirgain"]
+members = ["crates/kf-core", "crates/kf-dirgain", "crates/kf-dirgain-oracle"]
 
 [workspace.package]
 version = "0.0.0"

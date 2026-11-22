@@ -27,7 +27,7 @@ jobs:
       - run: cargo test --workspace --locked
 
   portable:
-    name: wasm32, no_std, lint gates, reproducibility
+    name: wasm32, no_std, lint gates, reproducibility, C oracle
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,6 +36,16 @@ jobs:
       - run: cargo check --locked --target thumbv7em-none-eabihf -p kf-dirgain
       - run: ci/clippy-canary.sh
       - run: ci/reproducible.sh
+      # ci/wasi-node.mjs needs node:wasi preview1 and --disable-warning (Node >= 20.11).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: ci/test-wasi.sh
+      # Differential fuzz against the C engine: 10^8 compared ops + 10^7 profile buffers.
+      - run: cargo test --release --locked -p kf-dirgain-oracle --test fuzz -- --ignored
+      # The committed trace vectors must be exactly what the C oracle generates.
+      - run: cargo run --locked -p kf-dirgain-oracle --bin gen-traces -- crates/kf-dirgain/tests/vectors/traces.json
+      - run: git diff --exit-code -- crates/kf-dirgain/tests/vectors
 
   deny:
     runs-on: ubuntu-24.04

@@ -32,9 +32,9 @@ architecture is approved. "H1" etc. refer to hardware classes in
 
 Acceptance: the ten documents exist; decisive claims verified against primary sources; open questions listed with verification procedures; **your review and approval of STACK_DECISION.md and ARCHITECTURE.md** (approved 2026-11-22); answers to STACK_DECISION.md §6 — items 2–8 still open, each needed only by the milestone that uses it (web accessibility and hosting: M8; Linux input permissions: M6a research mode; name: before any public repo or package; toolchain install: M1; Aimlabs: AL-E experiments only; ODD questions: M2/M11).
 
-## M1 — Toolchain, workspace, cross-target CI
+## M1 — Toolchain, workspace, cross-target CI ✅
 
-**Status 2026-11-22:** toolchain installed (rustup, Rust 1.100.0); workspace, lint gates, canary, reproducibility check, cargo-deny policy and CI workflow in place; all checks pass **locally on Linux x86-64** (fmt, clippy, tests, wasm32 and thumbv7em builds, canary, bit-identical rebuilds, cargo-deny). Pending: a GitHub repository so the six-runner CI can run (the `windows-11-arm` image's preinstalled rustup is unverified).
+**Status 2026-11-22: ✅ done.** Toolchain installed (rustup, Rust 1.100.0); workspace, lint gates, canary, reproducibility check, cargo-deny policy and CI workflow in place. First CI run on GitHub (`0zLloen/kineforge`, run 45029978914, commit `bc0fd9d`) green on all six runners (`ubuntu-24.04`, `ubuntu-24.04-arm`, `windows-2025`, `windows-11-arm`, `macos-15`, `macos-15-intel`) plus the wasm32/no_std/canary/reproducibility job and cargo-deny.
 
 - With your permission: install rustup and the pinned toolchain (+ `wasm32-unknown-unknown`, `thumbv7em-none-eabihf` targets).
 - Git repository, workspace with `kf-core` and `kf-dirgain` only (empty APIs are not created ahead of need).
@@ -44,9 +44,12 @@ Acceptance: the ten documents exist; decisive claims verified against primary so
 
 ## M2 — `kf-dirgain`: bit-exact Open Directional DPI port
 
+**Status 2026-11-22:** implemented; all acceptance checks pass locally (CI run pending the push). Zero mismatches against the C engine (ODD `c177d23`) across 2592 scale vectors, 18 ported unit tests, 118 generated traces / 3909 steps, and 10⁸ compared fuzz ops + 10⁷ profile buffers; the same fixtures pass on wasm32-wasip1 under Node; `kf-dirgain` is `no_std`, zero-dependency and has no `unsafe`. The oracle lives in a separate native-only crate, `kf-dirgain-oracle` (vendored C, `gen-traces`, fuzzer), rather than a dev feature, so `kf-dirgain` keeps no build script.
+
 - Port engine, profile (de)serialisation, CRC, capabilities (≈350 lines), `#![no_std]`, no allocation.
-- Fixtures: all 2592 `scale_vectors.json` cases, the 17 C unit tests, CRC/JSON cases; **new stateful trace vectors** from a C generator (window lengths 0/1/16/31/32/64/128, every flag, 2×2, carry at ±32767/−32768, idle thresholds incl. u32 wrap, DPI switches, HID request/response pairs) — kept in KineForge unless you choose to adopt them in ODD.
-- Native-only differential fuzzer against the C engine (dev feature using the `cc` crate).
+- Fixtures: all 2592 `scale_vectors.json` cases, the 17 C unit tests, the CRC-16 check value; **new stateful trace vectors** from a C generator (window lengths 0/1/16/31/32/64/128, every flag, 2×2, carry at ±32767/−32768, idle thresholds incl. u32 wrap, DPI switches, HID request/response pairs) — kept in KineForge unless you choose to adopt them in ODD.
+- Native-only differential fuzzer against the C engine (`kf-dirgain-oracle` crate, C compiled with the `cc` crate).
+- Moved to M11: the JSON ↔ bytes fixtures (OpenMouse tests 11/19) and the QMK raw-HID framing test, since profile JSON export and the `odd-hid` transport live there.
 
 **Acceptance:** 100 % fixture pass on native, wasm32 (Node runner) and thumbv7em build; ≥10⁸ fuzz steps with zero state mismatches; no `unsafe`.
 
@@ -105,7 +108,7 @@ Scenario file format; families: static flick, dynamic flick (moving targets), ce
 
 ## M11 — Calibration (Open Directional DPI)
 
-Port the authoritative calibration analysis (frozen with fixtures from real logs first), fitting/validation (E8), profile comparison, export as ODD JSON + 28-byte profile, upload via `kf-input` feature `odd-hid` (hidapi/hidraw natively, WebHID on Chromium).
+Port the authoritative calibration analysis (frozen with fixtures from real logs first), fitting/validation (E8), profile comparison, export as ODD JSON + 28-byte profile (with the JSON ↔ bytes fixtures from OpenMouse tests 11/19, moved from M2), upload via `kf-input` feature `odd-hid` (hidapi/hidraw natively, WebHID on Chromium; with the QMK raw-HID framing test, moved from M2).
 
 **Acceptance:** analysis output equals the frozen fixtures; exported profiles byte-equal ODD's serializer; held-out validation report generated; **profile export refused for sources outside the calibration-validity rule** (EXPERIMENT_PLAN E8; e.g. accelerated browser streams); E8 step 0 (hidraw vs browser fit comparison) reported; firmware round-trip on the Glorious mouse (with your consent; device writes are irreversible-ish operations).
 
