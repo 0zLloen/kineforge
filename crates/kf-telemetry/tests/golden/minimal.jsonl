@@ -1,0 +1,8 @@
+{"kind":"session_header","value":{"app":{"name":"kineforge-golden","version":"0.0.0"},"clock_domains":[{"drift_ppm":0.0,"id":0,"kind":"session","meaning":"session_clock","offset_to_session_ns":0,"offset_uncertainty_ns":0,"resolution_ns":1},{"drift_ppm":0.25,"id":1,"kind":"linux_monotonic","meaning":"kernel_flush","offset_to_session_ns":-1834512000,"offset_uncertainty_ns":5000,"resolution_ns":1000}],"schema":"kineforge.session/0.1","session_id":"6f1c2b9e-4d7a-4f3e-9c21-0a5b7d3e8f11","source_app":null,"started_at_utc":"2026-11-14T21:04:05Z"}}
+{"kind":"source_declare","value":{"backend":"synthetic","clock_domain":1,"evidence_class":"simulated_truth","id":3,"input_level":"synthetic","kind":"mouse","processing":["injected_test_stream"],"receipt_meaning":"app_dequeue","units":"counts","value_scale":1}}
+{"dx":1,"dy":-1,"flags":0,"kind":"input_motion","seq":0,"source":3,"src_ts_ns":null,"t_ns":0}
+{"dx":2,"dy":-2,"flags":0,"kind":"input_motion","seq":1,"source":3,"src_ts_ns":null,"t_ns":125000}
+{"dx":4,"dy":-4,"flags":0,"kind":"input_motion","seq":2,"source":3,"src_ts_ns":null,"t_ns":250000}
+{"frame":null,"kind":"commit","sources":[[3,2]],"t_ns":500000,"tick":null}
+{"kind":"session_end","value":{"completed":true,"counts":{"input_motion":3,"session_header":1,"source_declare":1},"dropped_chunks":0,"end_reason":"completed","interruptions":1,"max_writer_backlog_bytes":4096,"refresh_hz_measured":164.9997,"t_end_ns":500000}}
+{"after_end_chunks":0,"committed_end":992,"complete":true,"kind":"ending","stop":null,"uncommitted_chunks":0,"valid_end":1248}

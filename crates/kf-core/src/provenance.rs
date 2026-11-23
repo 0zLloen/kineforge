@@ -48,6 +48,23 @@ macro_rules! named_enum {
                 f.write_str(self.as_str())
             }
         }
+
+        /// Serialized as its [`as_str`](Self::as_str) name.
+        #[cfg(feature = "serde")]
+        impl serde::Serialize for $name {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                s.serialize_str(self.as_str())
+            }
+        }
+
+        #[cfg(feature = "serde")]
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<$name, D::Error> {
+                const NAMES: &[&str] = &[$($s),+];
+                let s = String::deserialize(d)?;
+                s.parse().map_err(|_| serde::de::Error::unknown_variant(&s, NAMES))
+            }
+        }
     };
 }
 
@@ -231,5 +248,23 @@ mod tests {
         }
         assert_eq!("VERIFIED".parse::<ClaimStatus>(), Err(UnknownName));
         assert_eq!("".parse::<Units>(), Err(UnknownName));
+    }
+}
+
+#[cfg(all(test, feature = "serde"))]
+mod serde_tests {
+    use super::*;
+
+    #[test]
+    fn json_names() {
+        assert_eq!(
+            serde_json::to_string(&InputLevel::BrowserLockedUnadjusted).unwrap(),
+            "\"browser_locked_unadjusted\""
+        );
+        assert_eq!(
+            serde_json::from_str::<ClaimStatus>("\"community_established\"").unwrap(),
+            ClaimStatus::CommunityEstablished
+        );
+        assert!(serde_json::from_str::<Units>("\"COUNTS\"").is_err());
     }
 }

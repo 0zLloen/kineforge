@@ -27,12 +27,12 @@ jobs:
       - run: cargo test --workspace --locked
 
   portable:
-    name: wasm32, no_std, lint gates, reproducibility, C oracle
+    name: wasm32, no_std, lint gates, reproducibility, C oracle, KFLOG parity
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
-      - run: cargo check --locked --target wasm32-unknown-unknown -p kf-core -p kf-dirgain
+      - run: cargo check --locked --target wasm32-unknown-unknown -p kf-core -p kf-dirgain -p kf-telemetry
       - run: cargo check --locked --target thumbv7em-none-eabihf -p kf-dirgain
       - run: ci/clippy-canary.sh
       - run: ci/reproducible.sh
@@ -46,6 +46,15 @@ jobs:
       # The committed trace vectors must be exactly what the C oracle generates.
       - run: cargo run --locked -p kf-dirgain-oracle --bin gen-traces -- crates/kf-dirgain/tests/vectors/traces.json
       - run: git diff --exit-code -- crates/kf-dirgain/tests/vectors
+      # The stdlib Python reader reads the golden logs as the Rust reader does,
+      # and FORMAT.md lists its SHA-256.
+      - run: ci/python-parity.sh
+      # Untrusted-input fuzzing of the KFLOG reader/validator/recovery and .kfz import.
+      # Overflow checks on: release would otherwise wrap arithmetic on untrusted lengths silently.
+      - run: cargo test --release --locked -p kf-telemetry --features parquet --test fuzz --config profile.release.overflow-checks=true -- --ignored
+      # The committed golden logs are exactly what the generator writes.
+      - run: cargo run --locked -p kf-cli -- golden crates/kf-telemetry/tests/golden
+      - run: git diff --exit-code -- crates/kf-telemetry/tests/golden
 
   deny:
     runs-on: ubuntu-24.04

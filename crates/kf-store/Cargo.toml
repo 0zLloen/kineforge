@@ -1,0 +1,17 @@
+[package]
+name = "kf-store"
+description = "Durable native storage for KineForge sessions: raw-log writer and sync threads, liveness lock, space reserve, recovery sidecars, bundles."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kf-core = { path = "../kf-core", features = ["serde"] }
+kf-telemetry = { path = "../kf-telemetry" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = "0.11"

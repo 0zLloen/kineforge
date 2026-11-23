@@ -1,0 +1,4 @@
+# Golden dumps, FORMAT.md and read_kflog.py are compared byte for byte on
+# every runner, so no checkout may convert line endings.
+* text=auto eol=lf
+*.kflog binary

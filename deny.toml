@@ -8,7 +8,17 @@ all-features = true
 yanked = "deny"
 
 [licenses]
-allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "Zlib", "Unicode-3.0"]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "Zlib",
+    "Unicode-3.0",
+    # zstd-sys (the native Parquet zstd codec, STACK_DECISION.md §7).
+    "BSD-2-Clause",
+    # tiny-keccak, via const-random -> ahash -> arrow (public-domain dedication).
+    "CC0-1.0",
+]
 confidence-threshold = 0.9
 # The allow-list is policy declared ahead of the dependencies that need it.
 unused-allowed-license = "allow"

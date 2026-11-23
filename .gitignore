@@ -1,3 +1,4 @@
 /target
 # Private: file-level inventory of a third-party install (AIMLABS_RESEARCH.md §6.4). Never publish.
 /research/notes/aimlabs.md
+__pycache__/

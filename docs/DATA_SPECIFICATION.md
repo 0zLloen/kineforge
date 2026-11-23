@@ -32,7 +32,7 @@ Two label sets exist and must not be confused:
 | Wall clock | RFC 3339 UTC in the header (`started_at_utc`); omitted in privacy exports. |
 | **Simulation time τ** | Advances only while the simulation runs: τ(t) = t − Σ(paused intervals before t), where pause/resume times come from `sim_control` records. `tick: u64` counts steps of 1/`sim_hz` of τ (`sim_hz` must divide 1e9; default 1000); `t_sim_ns(tick) = tick × 1e9/sim_hz`. **The `frame` records' `first_tick`/`ticks` are authoritative** — replay never recomputes ticks from timestamps. |
 
-Sentinels (`i64::MIN`, `u32::MAX`) are never used in arithmetic; Parquet export and the reference reader map them to null.
+Sentinels (`i64::MIN`, `u32::MAX`, `u64::MAX`, `0xFFFF`) are never used in arithmetic; Parquet export and the reference reader map them to null. In memory (`kf-core`) they are `Option`s, and writers refuse `Some(sentinel)`.
 
 ### 2.2 Coordinate frames
 
@@ -102,21 +102,21 @@ For third-party sessions (e.g. Aimlabs), target positions and camera state are *
 sessions/<session-id>/
   raw.kflog                  # source of truth (never modified after close)
   raw.recovered.json         # only after crash recovery (§5.4)
-  manifest.json              # convenience copy of header + declarations + end record + file hashes (regenerable)
+  manifest.json              # convenience copy of header + declarations (up to 256 KiB of declaration JSON; declarations_omitted counts the rest) + end record + file hashes (regenerable)
   derived/
     input_motion.parquet  input_events.parquet  frames.parquet  frame_timing.parquet  drains.parquet
     sim_camera.parquet    sim_targets.parquet   sim_shots.parquet  sim_control.parquet  annotations.parquet
-    app_results.parquet   trials.parquet        metrics.parquet
+    app_results.parquet   clock_sync.parquet    (trials.parquet  metrics.parquet: computed tables, M9)
 analyses/<analysis-id>/      # cross-session artifacts (§8.1)
   manifest.json  *.parquet  [profile.odd.bin  profile.odd.json]  report.md
-export: <id>.kfz             # ZIP, members STORED, flat names (§12.1): raw.kflog, manifest.json, derived/*.parquet, FORMAT.md (text)
+export: <id>.kfz             # ZIP, members STORED, flat names (§12.1): raw.kflog, manifest.json, <table>.parquet, FORMAT.md (text)
 ```
 
 `session-id` and `analysis-id` are **UUIDv4** (a UUIDv7 would leak the creation time even in privacy exports). The **session identity hash** is SHA-256 of `raw.kflog`, or for recovered sessions SHA-256 of the recovered byte stream (§5.4); derived tables, analyses and the validator use it.
 
 ## 5. Raw log format `KFLOG v1`
 
-All integers little-endian; floats IEEE-754 binary64 LE; NaN invalid everywhere.
+All integers little-endian; floats IEEE-754 binary64 LE; NaN and ±infinity invalid everywhere. The byte-level reference, normative where this section is less precise, is `crates/kf-telemetry/FORMAT.md` (shipped in every `.kfz`).
 
 ### 5.1 Layout
 
@@ -128,9 +128,9 @@ All integers little-endian; floats IEEE-754 binary64 LE; NaN invalid everywhere.
 |---|---|---|
 | `payload_len` | u32 | multiple of 8; ≤ 1 MiB |
 | `kind` | u8 | record kind (§6) |
-| `kind_version` | u8 | layout version of that kind |
+| `kind_version` | u8 | layout version of that kind (1 for every v1 kind; a known kind at another version is skipped like an unknown kind) |
 | `flags` | u16 | bit 0 = payload LZ4-compressed (reserved; v1 writers never set it) |
-| `record_count` | u32 | fixed-layout kinds: `payload_len == record_count × record_size`; JSON kinds: always 1 |
+| `record_count` | u32 | fixed-layout kinds: `payload_len == record_count × record_size`; JSON kinds and `commit`: always 1; `annotation`: the number of records |
 | `reserved` | u32 | 0 |
 | `payload` | bytes | packed fixed-size records of one kind (all sizes are multiples of 8), or **exactly one** UTF-8 JSON document padded with trailing spaces to a multiple of 8, or (annotation) self-framed variable records |
 | `crc32` | u32 | CRC-32 (IEEE, as Python `zlib.crc32`) over the 16-byte chunk header and the payload |
@@ -139,12 +139,13 @@ All integers little-endian; floats IEEE-754 binary64 LE; NaN invalid everywhere.
 
 - **Producers.** Capture events arrive at the recorder (ARCHITECTURE.md §3); the main loop sends **one message per frame** containing all records produced in that frame (frame, drain, sim_*, sim_control, annotations, frame_timing of earlier frames). The recorder appends to per-kind buffers and **cuts a group only at a frame-message boundary**, every `chunk_flush_ms` (default 100 ms) or when any buffer reaches 4096 records.
 - **Group order:** declaration chunks (`session_header`, `source_declare`, `device_info`) first, then the other kinds in ascending kind number, then the `commit` chunk last. Within a kind, records keep arrival order.
-- **Commit watermark:** `t_ns`, `tick` = last tick of the last complete frame in the group, `frame` = that frame, and per-source last `seq` written so far.
-- **Native durability:** a writer thread `write`s each group; a separate sync thread calls `fdatasync` every `fsync_ms` (default 1000 ms) and at close, so writes never wait for a sync. The recorder→writer queue is unbounded up to a memory cap (default 64 MiB); beyond it, groups are dropped and a `storage_error` gap is recorded. The maximum observed backlog is reported in `session_end`.
+- **Commit watermark:** `t_ns`, `tick` = last tick of the last complete frame written so far, `frame` = that frame (both `u64::MAX` before any frame), and per-source last `seq` written so far.
+- **Native durability:** a writer thread `write`s each group; a separate sync thread calls `fdatasync` about every `fsync_ms` (default 1000 ms; each sync starts early by the previous one's duration, so a write is durable within `fsync_ms`) and at close, so writes never wait for a sync. The recorder→writer queue is unbounded up to a memory cap (default 64 MiB); beyond it, a group is dropped and the session ends with `storage_error` (as for a write error, below). The maximum observed backlog is reported in `session_end`.
+- **Recorder memory:** whenever the recorder thread reads the writer's status it passes `written_bytes` to `Recorder::written`, which forgets group boundaries that can no longer be rolled back to, so memory stays bounded however long the session runs.
 - **Web durability:** chunk bytes go to the OPFS Worker, which `write`s them and calls `flush()` every `fsync_ms`. On `visibilitychange: hidden` and `pagehide`, the main thread sends its frame message, the recorder cuts a complete group **with its commit**, and the worker is asked to flush.
 - **Liveness lock:** natively an exclusive file lock (`flock`/`LockFileEx`); on the web the writing tab holds `navigator.locks.request(session_id)` for the whole session. A held lock means "live — do not recover".
-- **Space reserve:** at session start the writer reserves ≥ 64 KiB (native `fallocate(FALLOC_FL_KEEP_SIZE)` / `FileAllocationInfo`; web: a small reserve file in OPFS). On `ENOSPC`/`QuotaExceededError` the reserve is released, later chunks are dropped (counted), and the final group, its commit and `session_end` (`end_reason: storage_error`) are written.
-- **Close sequence:** final group → its `commit` → `session_end` as the terminal chunk. Recovery treats a CRC-valid `session_end` directly after a `commit` as committed.
+- **Space reserve:** at session start the writer creates a reserve file of ≥ 64 KiB of random bytes next to the log (`raw.kflog.reserve`, synced; web: the same in OPFS) — portable, instead of `fallocate(FALLOC_FL_KEEP_SIZE)`/`FileAllocationInfo`; zeros would take no space on compressing filesystems. On a write error (`ENOSPC`, `QuotaExceededError`, any I/O error) the writer cuts the torn group off (it was never committed) and drops later groups. **After any drop** the recorder waits for the writer to drain, rolls back to the file's last group boundary (`Recorder::writer_lost`: counts and commit watermarks as written), and records a `storage_error` gap per source with written input plus one without a source (covering sources whose records were all lost). The writer releases the reserve right before it writes the final group — those gaps, its commit and `session_end` (`end_reason: storage_error`, `dropped_chunks` counted) — into the freed space.
+- **Close sequence:** the recorder cuts and submits its last regular group like any other and waits for the writer to drain (a storage error seen there ends the session with `storage_error`); the final group then holds only its `commit` (plus any `storage_error` gaps) and `session_end` as the terminal chunk, so it always fits the reserve. Recovery treats a CRC-valid `session_end` directly after a `commit` as committed.
 - **Expected loss bounds** (PERFORMANCE_PLAN N9b/N9c): process kill or tab close ≤ `chunk_flush_ms` + writer backlog at kill time; power loss ≤ `fsync_ms` + `chunk_flush_ms` + backlog.
 
 ### 5.3 Forward compatibility
@@ -153,7 +154,7 @@ Readers skip unknown kinds (by `payload_len`) and report them. A layout change b
 
 ### 5.4 Recovery (never in place)
 
-Only when the liveness lock is free. Scan from the start; stop at the first short read, bound violation or CRC mismatch; the valid prefix ends at the **last `commit` chunk** before that point. Build a deterministic synthetic `session_end` (`{completed: false, end_reason: "recovered", …}` with fields fully determined by the prefix) and write `raw.recovered.json` = `{valid_prefix_bytes, synthetic_end_b64, recovered_sha256, tail_bytes_ignored}` next to the untouched `raw.kflog`. The recovered byte stream is *prefix ‖ synthetic end chunk*; its SHA-256 is the session identity; exports write exactly those bytes. A sidecar is ignored if `raw.kflog` contains a CRC-valid `session_end` after `valid_prefix_bytes` (the session was not dead after all). Records after the last commit are reported as uncommitted and never used.
+Only when the liveness lock is free; recovery holds it (shared, so it works on read-only and NFS file descriptors) while it runs and deletes a leftover `raw.kflog.reserve`. Scan from the start; stop at the first short read, bound violation, CRC mismatch, or non-zero trailer/reserved bytes; the valid prefix ends at the **last `commit` chunk** before that point. Build a deterministic synthetic `session_end` (`{completed: false, end_reason: "recovered", t_end_ns: <last commit t_ns>, counts: <committed records>, …}`, every field determined by the prefix; FORMAT.md §8) and write `raw.recovered.json` = `{valid_prefix_bytes, synthetic_end_b64, recovered_sha256, tail_bytes_ignored}` next to the untouched `raw.kflog`. The recovered byte stream is *prefix ‖ synthetic end chunk*; its SHA-256 is the session identity; exports write exactly those bytes. A sidecar is ignored if `raw.kflog` contains a CRC-valid `session_end` directly after a commit (the session was not dead after all). Records after the last commit are reported as uncommitted and never used.
 
 ## 6. Record kinds (v1)
 
@@ -168,7 +169,7 @@ Only when the liveness lock is free. Scan from the start; stop at the first shor
 | 0x7C | `commit` | `t_ns i64, tick u64, frame u64, n u32, _pad u32, n × {source u16, _pad u16, last_seq u32}` | 32 + 8n |
 | 0x7D | `clock_sync` | `t_ns i64, domain u16, _pad u16, _pad u32, src_ts_ns i64, uncertainty_ns i64` | 32 |
 | 0x7E | `annotation` | sequence of `{t_ns i64, code u16, source u16 (0xFFFF = none), first_seq u32, lost u32 (u32::MAX = unknown), len u32, utf8[len], pad to 8}` | var |
-| 0x7F | `session_end` | JSON `{completed, end_reason, t_end_ns, counts per kind, dropped_chunks, max_writer_backlog_bytes, interruptions, refresh_hz_measured, raf_hz_measured}`; terminal chunk | var |
+| 0x7F | `session_end` | JSON `{completed, end_reason, t_end_ns, counts per kind, dropped_chunks, max_writer_backlog_bytes, interruptions, refresh_hz_measured, raf_hz_measured}` (the last two omitted when unknown); terminal chunk | var |
 
 ### 6.2 Input (evidence class per source declaration, §3.2)
 
@@ -301,7 +302,7 @@ Notes: Chrome's adjusted `movementX` on Linux is integer DIP (not CSS px, not fr
 
 ## 8. Derived data
 
-Each Parquet table carries key-value metadata: `kineforge.format_version`, `session_identity_sha256`, `algorithm`, `algorithm_version`, `params` (JSON), `evidence_class`. Tables that re-encode raw records keep the raw evidence class; computed tables (`trials`, `metrics`, `flicks`, `tracking_error`, `directional_bias`, `fitts`, `scores`) are `derived`. Recomputing from the same raw log and algorithm version gives identical values (bit-exact for scoring kernels; declared tolerance for floating-point analysis kernels).
+Each Parquet table carries key-value metadata: `kineforge.format_version`, `session_identity_sha256`, `algorithm`, `algorithm_version`, `params` (JSON), `evidence_class`. Tables that re-encode raw records keep the raw evidence class (`input_motion` and `input_events` can mix sources, so theirs is a JSON object mapping each source id with rows to its declared class, `null` if undeclared, e.g. `{"0":"observed"}`); computed tables (`trials`, `metrics`, `flicks`, `tracking_error`, `directional_bias`, `fitts`, `scores`) are `derived`. Recomputing from the same raw log and algorithm version gives identical values (bit-exact for scoring kernels; declared tolerance for floating-point analysis kernels).
 
 ### 8.1 Analysis artifacts (cross-session)
 
@@ -329,7 +330,7 @@ Replay with a different build is allowed but reported (hashes need not match if 
 
 ## 10. Validation
 
-Magic, version; chunk bounds (`payload_len` ≤ 1 MiB and ≤ remaining bytes; fixed-kind size identity; JSON kinds `record_count = 1`); CRCs; group order (declarations first, commit last); declarations precede use in file order; commit watermarks monotonic; terminal `session_end` or a valid recovery sidecar; header JSON schema; `seq` gaps per source reported as loss (flagged as a capture bug when no gap annotation covers them); `t_ns` monotonic per source; NaN absent. When `simulation` is present: each `drain` names exactly one source; driving-source switches only via `switch_source` between `pause` and `resume` with identical level/units/scale; `yaw_rad` equals recomputation from units; replay hash equality. Derived tables and analyses reference the session identity hash.
+Magic, version; chunk bounds (`payload_len` ≤ 1 MiB and ≤ remaining bytes; fixed-kind size identity; JSON kinds `record_count = 1`); CRCs; group order (declarations first, commit last); declarations precede use in file order; commit watermarks monotonic; terminal `session_end` or a valid recovery sidecar; header JSON schema; `seq` gaps per source reported as loss (flagged as a capture bug when no gap annotation covers them; an annotation with unknown `lost` covers only the gap starting at its `first_seq`); `t_ns` monotonic per source (in `seq` order: a source's motion, button and wheel records sit in separate chunks); NaN and ±infinity absent; unknown string enum values in typed header/declaration fields are errors (they need a newer reader). When `simulation` is present: tick continuity across `frame` records; each `drain` is of the driving source, at most one per frame; driving-source switches only via `switch_source` between `pause` and `resume` with identical level/units/scale; `yaw_rad` equals recomputation from units; replay hash equality (with `kf-sim`, M5); drains and `sim_control` are checked in replay order (§9.1), not file order. The header checks (including the `session_id` UUID shape and the `started_at_utc` RFC 3339 UTC shape) are listed in FORMAT.md §10. A report keeps the first 1000 issues and counts the rest. Derived tables and analyses reference the session identity hash.
 
 ## 11. Versioning and migration
 
@@ -343,7 +344,7 @@ Schema id `kineforge.session/<major>.<minor>`. Minor = additive (new optional JS
 
 ### 12.1 Untrusted input (import of `.kfz` / `.kflog`)
 
-Every length is bounded by the remaining bytes before allocation; chunks and JSON documents > 1 MiB are rejected; fixed-kind size identity enforced; ZIP members must be STORED, unique, flat names from a fixed allow-list (no paths, no `..`); the declared total size is checked against the storage quota before writing to OPFS. Bundles never contain executable code: the reference reader `read_kflog.py` is published at a fixed location with its SHA-256 listed in `FORMAT.md`; recipients use the published copy.
+Every length is bounded by the remaining bytes before allocation; chunks and JSON documents > 1 MiB are rejected; fixed-kind size identity enforced; ZIP members must be STORED, unique, flat names from a fixed allow-list (no paths, no `..`); the declared total size is checked against the storage quota before writing to OPFS (natively, `kf-cli unpack --quota` also counts the regenerated `manifest.json`, whose copies of declarations are capped at 256 KiB). Bundles never contain executable code: the reference reader `read_kflog.py` is published at a fixed location with its SHA-256 listed in `FORMAT.md`; recipients use the published copy.
 
 ### 12.2 Future sync (not in v1)
 

@@ -1,0 +1,20 @@
+[package]
+name = "kf-cli"
+description = "KineForge command line: validate, inspect, dump, recover, export, pack/unpack, golden files, telemetry benchmarks."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "kf-cli"
+path = "src/main.rs"
+
+[dependencies]
+kf-core = { path = "../kf-core", features = ["serde"] }
+kf-telemetry = { path = "../kf-telemetry", features = ["parquet"] }
+kf-store = { path = "../kf-store" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
