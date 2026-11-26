@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: rustup toolchain install
-      - run: cargo check --locked --target wasm32-unknown-unknown -p kf-core -p kf-dirgain -p kf-telemetry
+      - run: cargo check --locked --target wasm32-unknown-unknown -p kf-core -p kf-dirgain -p kf-sim -p kf-telemetry
       - run: cargo check --locked --target thumbv7em-none-eabihf -p kf-dirgain
       - run: ci/clippy-canary.sh
       - run: ci/reproducible.sh
@@ -41,6 +41,11 @@ jobs:
         with:
           node-version: 24
       - run: ci/test-wasi.sh
+      # E10: the simulation corpus hashes pinned in kf-sim/tests/e10.rs also hold in
+      # release builds (debug runs on every native runner and wasm32 above).
+      - run: cargo test --release --locked -p kf-sim
+      # N10: headless replay ≥ 100× real time (a 300 s recorded session).
+      - run: cargo test --release --locked -p kf-cli --test replay -- --ignored --nocapture
       # Differential fuzz against the C engine: 10^8 compared ops + 10^7 profile buffers.
       - run: cargo test --release --locked -p kf-dirgain-oracle --test fuzz -- --ignored
       # The committed trace vectors must be exactly what the C oracle generates.

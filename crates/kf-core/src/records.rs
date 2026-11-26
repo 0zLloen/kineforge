@@ -92,10 +92,15 @@ pub mod target_shape {
 pub struct SimShot {
     pub tick: u64,
     pub t_ns: Nanos,
-    /// `None` when the shot hit no target.
+    /// The reference target: the one the ray hit, else the alive target
+    /// nearest in angle; `None` only when no target was alive
+    /// (DATA_SPECIFICATION.md §2.3 item 5). `hit` says whether it was hit.
     pub target: Option<u32>,
     /// `seq` of the button record that fired it.
     pub seq: u32,
+    /// Great-circle angle from the aim to the reference target's centre;
+    /// with `d_yaw_rad`/`d_pitch_rad`, 0.0 (meaning n/a) when `target` is
+    /// `None`.
     pub ang_err_rad: f64,
     pub d_yaw_rad: f64,
     pub d_pitch_rad: f64,
@@ -106,6 +111,8 @@ pub struct SimShot {
 /// from driving-source records.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SimControl {
+    /// The simulation's next tick when the control was applied: the frame's
+    /// `first_tick` for phase 0, `first_tick + ticks` for phase 1.
     pub tick: u64,
     pub t_ns: Nanos,
     pub frame: u64,

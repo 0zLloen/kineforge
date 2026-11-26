@@ -188,6 +188,14 @@ RFC 3339 UTC: `YYYY-MM-DDTHH:MM:SS[.fraction]Z`), `clock_domains` (array),
   initial driving source), plus other fields (`rng`, …).
 - `sensitivity`: `model` (string), `yaw_rad_per_unit`, `pitch_rad_per_unit`,
   `sens_x`, `sens_y` (f64), `invert_y` (bool), plus other fields (`fov`, …).
+- Read by replay (`kf-cli replay`), not checked by the validator:
+  `simulation.rng` = `{"algorithm": "xoshiro256++", "seeding": "splitmix64",
+  "seed": "0x…"}` (hex u64), `sensitivity.directional_gain` (`null` or
+  `{"profile": <56 hex digits>, "engine": …, "policy": "carry_capped"}`),
+  `scenario` = `{"id", "version", "config"}` with every config field present
+  and no others (a scenario config is closed and versioned by its
+  `version`: unlike other JSON objects, unknown fields are refused),
+  `scoring` = `{"model", "scoring_version"}` (DATA_SPECIFICATION.md §7).
 
 **`source_declare` (0x04):** `id` (u16, 0–0xFFFE), `source_rank` (optional
 u32, default `id`), `backend` (string), `input_level` (`device_report`,

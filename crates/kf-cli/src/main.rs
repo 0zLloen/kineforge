@@ -3,6 +3,7 @@
 //! 0 success, 1 failure (or validation errors), 2 bad command line.
 
 mod bench;
+mod replay;
 
 use kf_store::{DERIVED, MANIFEST, Recovery, SIDECAR};
 use kf_telemetry::json::end_reason;
@@ -31,6 +32,9 @@ usage: kf-cli <command> [arguments]
   pack <session-dir> -o <file.kfz>      export a session as a stored ZIP
   unpack <file.kfz> <root> [--quota BYTES]
                                         import into <root>/sessions/<session-id>/
+  replay <raw.kflog | session-dir>      re-simulate a session frame by frame and compare
+                                        every sim_* record; JSON report with per-attempt
+                                        scores (kf.flick.v1); exit 1 unless identical
   golden <dir>                          write the golden example logs
   bench [--seconds 10] [--sources 3] [--rate 8000] [--frames 1000] [--out DIR]
         [--fsync-ms 1000] [--flush-ms 100]
@@ -40,8 +44,9 @@ usage: kf-cli <command> [arguments]
 A session-dir with a raw.recovered.json sidecar is read as its recovered stream.
 ";
 
-const COMMANDS: [&str; 9] = [
-    "validate", "inspect", "dump", "recover", "export", "pack", "unpack", "golden", "bench",
+const COMMANDS: [&str; 10] = [
+    "validate", "inspect", "dump", "recover", "export", "pack", "unpack", "replay", "golden",
+    "bench",
 ];
 
 type Res<T = ExitCode> = Result<T, Box<dyn Error>>;
@@ -156,6 +161,7 @@ fn run(args: &[String]) -> Res {
             Path::new(root),
             num(&opts, "--quota", u64::MAX)?,
         ),
+        ("replay", [p]) => cmd_replay(Path::new(p)),
         ("golden", [d]) => golden(Path::new(d)),
         ("bench", []) => bench::run(&opts),
         (c, _) if COMMANDS.contains(&c) => usage(format!("wrong arguments for {c}")),
@@ -212,6 +218,18 @@ fn cmd_validate(path: &Path) -> Res {
         r.groups
     )?;
     Ok(if r.is_valid() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
+fn cmd_replay(path: &Path) -> Res {
+    let replayed = replay::replay(open(path)?)?;
+    let mut out = io::stdout().lock();
+    serde_json::to_writer_pretty(&mut out, &replay::report_json(&replayed))?;
+    writeln!(out)?;
+    Ok(if replayed.report.identical() {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE

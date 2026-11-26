@@ -16,13 +16,13 @@ for copy in a/first b/second-copy; do
     (cd "$root" && git ls-files -co --exclude-standard -z | xargs -0 tar -cf -) | tar -xf - -C "$dir"
     for target in "$host" wasm32-unknown-unknown; do
         (cd "$dir" && RUSTFLAGS="--remap-path-prefix=$dir=/kineforge --remap-path-prefix=$cargo_home=/cargo" \
-            cargo build --quiet --locked --release -p kf-core -p kf-dirgain --target "$target")
+            cargo build --quiet --locked --release -p kf-core -p kf-dirgain -p kf-sim --target "$target")
     done
 done
 
 status=0
 for target in "$host" wasm32-unknown-unknown; do
-    for lib in libkf_core.rlib libkf_dirgain.rlib; do
+    for lib in libkf_core.rlib libkf_dirgain.rlib libkf_sim.rlib; do
         a=$(sha256sum "$tmp/a/first/target/$target/release/$lib" | cut -d' ' -f1)
         b=$(sha256sum "$tmp/b/second-copy/target/$target/release/$lib" | cut -d' ' -f1)
         if [ "$a" = "$b" ]; then
