@@ -47,8 +47,13 @@ pub const RESERVE: &str = "raw.kflog.reserve";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WriterOptions {
-    /// Bound on the time from a write to the end of the `sync_data` that
-    /// covers it (default 1000; 0 is taken as 1).
+    /// Interval between `sync_data` calls (default 1000; 0 is taken as 1).
+    /// Each sync starts early by the previous one's duration, so with steady
+    /// syncs shorter than half the interval a write is durable about
+    /// `fsync_ms` after it. In general it is durable within
+    /// `max(fsync_ms, longest sync) + longest sync` (longest sync =
+    /// [`Status::max_sync_ns`]; a sync that outlasts the interval makes the
+    /// next one start at once).
     pub fsync_ms: u64,
     /// Queue limit in bytes (default 64 MiB).
     pub memory_cap_bytes: u64,
@@ -83,6 +88,9 @@ pub struct Status {
     pub backlog_bytes: u64,
     /// Largest queue seen, in bytes.
     pub max_backlog_bytes: u64,
+    /// Longest `sync_data` so far, in ns; bounds how late a write becomes
+    /// durable (see [`WriterOptions::fsync_ms`]).
+    pub max_sync_ns: u64,
     pub dropped_groups: u64,
     pub dropped_bytes: u64,
     /// A write or sync failed: end the session with `end_reason`
@@ -95,6 +103,7 @@ struct Shared {
     /// Submitted, not yet written or dropped.
     backlog: AtomicU64,
     max_backlog: AtomicU64,
+    max_sync_ns: AtomicU64,
     written: AtomicU64,
     durable: AtomicU64,
     storage_error: AtomicBool,
@@ -117,6 +126,7 @@ impl Shared {
             durable_bytes,
             backlog_bytes: self.backlog.load(Acquire),
             max_backlog_bytes: self.max_backlog.load(Acquire),
+            max_sync_ns: self.max_sync_ns.load(Acquire),
             dropped_groups: self.dropped_groups.load(Acquire),
             dropped_bytes: self.dropped_bytes.load(Acquire),
             storage_error: self.storage_error.load(Acquire),
@@ -205,6 +215,10 @@ fn sync_loop(file: File, stop: Receiver<()>, shared: &Shared, every: Duration) -
         let written = shared.written.load(Acquire);
         let started = Instant::now();
         let r = file.sync_data();
+        let took = started.elapsed();
+        shared
+            .max_sync_ns
+            .fetch_max(u64::try_from(took.as_nanos()).unwrap_or(u64::MAX), AcqRel);
         if r.is_ok() {
             shared.durable.fetch_max(written, AcqRel);
         } else {
@@ -215,8 +229,11 @@ fn sync_loop(file: File, stop: Receiver<()>, shared: &Shared, every: Duration) -
         }
         // Start the next sync early by this one's duration, so bytes written
         // just after this sync started are durable about `every` later
-        // (PERFORMANCE_PLAN N9c), not `every` plus a sync.
-        next = Instant::now().max(next + every.saturating_sub(started.elapsed()));
+        // (PERFORMANCE_PLAN N9c), not `every` plus a sync: they lag by
+        // `every` plus the next sync's duration minus this one's. A sync
+        // longer than `every` makes the next start at once (lag: the two
+        // syncs), so the bound is max(every, longest) + longest.
+        next = Instant::now().max(next + every.saturating_sub(took));
     }
 }
 

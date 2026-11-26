@@ -423,9 +423,10 @@ fn memory_cap_drop_ends_the_session() {
 #[test]
 fn power_loss_model() {
     const FSYNC_MS: u64 = 1000;
-    /// The `sync_data` duration and scheduling (F_FULLFSYNC on macOS,
-    /// FlushFileBuffers on Windows, loaded CI runners).
-    const SYNC_ALLOWANCE_MS: i64 = 250;
+    /// Thread wake-up and 1 ms sampling on loaded CI runners. The sync
+    /// durations themselves (F_FULLFSYNC on macOS, FlushFileBuffers on
+    /// Windows, slow shared disks) come from the writer's `max_sync_ns`.
+    const SCHED_ALLOWANCE_MS: i64 = 100;
     const FLUSH_MS: i64 = 100;
     const RUN_MS: i64 = 4000;
     struct Sample {
@@ -483,6 +484,7 @@ fn power_loss_model() {
         });
     }
     let t = RUN_MS * MS;
+    let max_sync = w.status().max_sync_ns as i64;
     w.close(rec.finish(end(end_reason::COMPLETED, t), Nanos(t)).unwrap())
         .unwrap();
     let raw = fs::read(dir.join(RAW)).unwrap();
@@ -491,19 +493,32 @@ fn power_loss_model() {
     // written → durable (sync interval + sync duration + scheduling).
     let first = |f: &dyn Fn(&Sample) -> bool| samples.iter().find(|s| f(s)).map(|s| s.wall);
     let (mut backlog, mut sync, mut covered) = (0i64, 0i64, 0u64);
+    // A group still not durable at the end lags at least until the last
+    // sample, so a sync loop that stalls mid-run fails the bound below.
+    let last_wall = samples.last().map_or(0, |s| s.wall);
     for &(cut, end) in &groups {
-        let (Some(tw), Some(td)) = (first(&|s| s.written >= end), first(&|s| s.durable >= end))
-        else {
+        let Some(tw) = first(&|s| s.written >= end) else {
             break;
         };
         backlog = backlog.max(tw - cut);
-        sync = sync.max(td - tw);
-        covered = end;
+        match first(&|s| s.durable >= end) {
+            Some(td) => {
+                sync = sync.max(td - tw);
+                covered = end;
+            }
+            None => sync = sync.max(last_wall - tw),
+        }
     }
+    // The sync loop's guarantee on any disk: durable within
+    // max(fsync_ms, longest sync) + longest sync. (Not checked: that the
+    // early start keeps the lag near fsync_ms with steady syncs; on a fast
+    // disk syncs are too short to tell, and without it the lag still fits.)
+    let allowed = (FSYNC_MS as i64 * MS).max(max_sync) + max_sync + SCHED_ALLOWANCE_MS * MS;
     assert!(
-        sync <= (FSYNC_MS as i64 + SYNC_ALLOWANCE_MS) * MS,
-        "sync lag {:.1} ms > fsync_ms {FSYNC_MS} + {SYNC_ALLOWANCE_MS} ms",
-        sync as f64 / 1e6
+        sync <= allowed,
+        "sync lag {:.1} ms > max(fsync_ms {FSYNC_MS}, longest sync {:.1} ms) + longest sync + {SCHED_ALLOWANCE_MS} ms",
+        sync as f64 / 1e6,
+        max_sync as f64 / 1e6
     );
     // Crash instants whose next group became durable within the run.
     let candidates: Vec<&Sample> = samples
@@ -549,10 +564,11 @@ fn power_loss_model() {
         max_loss = max_loss.max(loss);
     }
     println!(
-        "power-loss model: max loss {:.1} ms; bound = chunk_flush {FLUSH_MS} ms + backlog {:.1} ms + sync {:.1} ms (fsync_ms {FSYNC_MS})",
+        "power-loss model: max loss {:.1} ms; bound = chunk_flush {FLUSH_MS} ms + backlog {:.1} ms + sync {:.1} ms (fsync_ms {FSYNC_MS}, longest sync {:.1} ms)",
         max_loss as f64 / 1e6,
         backlog as f64 / 1e6,
         sync as f64 / 1e6,
+        max_sync as f64 / 1e6,
     );
     fs::remove_dir_all(root).unwrap();
 }
